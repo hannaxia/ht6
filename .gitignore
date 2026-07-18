@@ -16,3 +16,4 @@ pnpm-workspace.yaml
 ml/datasets/
 ml/models/*.pkl
 ml/models/*.csv
+.vscode/

@@ -1,7 +1,5 @@
 "use client";
 
-import { GridCellLayer, ScatterplotLayer } from "@deck.gl/layers";
-import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
@@ -12,7 +10,19 @@ import { HotelMarkerTooltip } from "./HotelMarkerTooltip";
 import { MapNotConfigured } from "./MapNotConfigured";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
-const TORONTO_CENTER: [number, number] = [-79.3832, 43.6532];
+// Centered so all of Canada is visible at initial load, zoomed out enough
+// to see hotel markers coast-to-coast; the opportunity heatmap itself stays
+// Toronto-scoped and will appear as a small cluster of cells near Toronto.
+const CANADA_CENTER: [number, number] = [-96.0, 62.0];
+const CANADA_ZOOM = 2.8;
+
+const HOTELS_SOURCE_ID = "hotels-source";
+const HOTELS_LAYER_ID = "hotels-layer";
+const GRID_SOURCE_ID = "opportunity-grid-source";
+const GRID_LAYER_ID = "opportunity-grid-layer";
+// Half the grid cell "diameter" in degrees, used to draw each opportunity
+// cell as a small square polygon around its center point.
+const GRID_CELL_HALF_DEG = 0.004;
 
 interface Hover {
   x: number;
@@ -21,10 +31,50 @@ interface Hover {
   cell?: OpportunityCell;
 }
 
-/** Green (high) → red (low) for opportunity scores. */
-function scoreColor(score: number): [number, number, number, number] {
-  const t = Math.max(0, Math.min(1, score / 100));
-  return [Math.round(220 * (1 - t)), Math.round(180 * t), 60, 120];
+function hotelsToGeoJson(hotels: Stay22Hotel[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: hotels.map((hotel) => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [hotel.coordinates.lng, hotel.coordinates.lat],
+      },
+      // Stash the full hotel as a JSON string in properties — Mapbox
+      // feature properties must be serializable, and this lets the hover
+      // handler reconstruct the exact object the tooltip component expects.
+      properties: { hotel: JSON.stringify(hotel) },
+    })),
+  };
+}
+
+function cellsToGeoJson(cells: OpportunityCell[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: cells.map((cell) => {
+      const { lng, lat } = cell.coordinates;
+      const d = GRID_CELL_HALF_DEG;
+      return {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [lng - d, lat - d],
+              [lng + d, lat - d],
+              [lng + d, lat + d],
+              [lng - d, lat + d],
+              [lng - d, lat - d],
+            ],
+          ],
+        },
+        properties: {
+          opportunityScore: cell.opportunityScore,
+          cell: JSON.stringify(cell),
+        },
+      };
+    }),
+  };
 }
 
 export function DiscoverMap({
@@ -36,7 +86,6 @@ export function DiscoverMap({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const overlayRef = useRef<MapboxOverlay | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
 
   // Never touch the Mapbox SDK without a token.
@@ -46,58 +95,119 @@ export function DiscoverMap({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/light-v11",
-      center: TORONTO_CENTER,
-      zoom: 11,
+      center: CANADA_CENTER,
+      zoom: CANADA_ZOOM,
+      // Kept as the 3D globe. Note: deck.gl (used previously for these
+      // layers) does not support Mapbox's globe projection — Mapbox
+      // doesn't expose the camera/projection internals deck.gl needs, so
+      // deck.gl markers visibly "float" off the sphere as it rotates
+      // (open upstream issue: visgl/deck.gl#7920). Native Mapbox GL
+      // GeoJSON layers (below) are rendered by Mapbox itself and stay
+      // correctly pinned to the globe at every rotation/zoom.
+      projection: "globe",
     });
-    const overlay = new MapboxOverlay({ layers: [] });
-    map.addControl(overlay);
     mapRef.current = map;
-    overlayRef.current = overlay;
-    log.info("mapbox map initialized");
+
+    map.on("load", () => {
+      map.addSource(GRID_SOURCE_ID, {
+        type: "geojson",
+        data: cellsToGeoJson(cells),
+      });
+      map.addLayer({
+        id: GRID_LAYER_ID,
+        type: "fill",
+        source: GRID_SOURCE_ID,
+        paint: {
+          // Red (low) → green (high) opportunity score, matching the
+          // previous deck.gl scoreColor mapping.
+          "fill-color": [
+            "interpolate",
+            ["linear"],
+            ["get", "opportunityScore"],
+            0,
+            "rgba(220,60,60,0.47)",
+            100,
+            "rgba(20,180,60,0.47)",
+          ],
+        },
+      });
+
+      map.addSource(HOTELS_SOURCE_ID, {
+        type: "geojson",
+        data: hotelsToGeoJson(hotels),
+      });
+      map.addLayer({
+        id: HOTELS_LAYER_ID,
+        type: "circle",
+        source: HOTELS_SOURCE_ID,
+        paint: {
+          "circle-radius": 5,
+          "circle-color": "rgba(30,64,175,0.9)",
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#fff",
+        },
+      });
+
+      const setPointer = (isHover: boolean) => {
+        map.getCanvas().style.cursor = isHover ? "pointer" : "";
+      };
+
+      map.on("mousemove", HOTELS_LAYER_ID, (e) => {
+        setPointer(true);
+        const feature = e.features?.[0];
+        const raw = feature?.properties?.hotel;
+        if (typeof raw === "string") {
+          setHover({
+            x: e.point.x,
+            y: e.point.y,
+            hotel: JSON.parse(raw) as Stay22Hotel,
+          });
+        }
+      });
+      map.on("mouseleave", HOTELS_LAYER_ID, () => {
+        setPointer(false);
+        setHover(null);
+      });
+
+      map.on("mousemove", GRID_LAYER_ID, (e) => {
+        setPointer(true);
+        const feature = e.features?.[0];
+        const raw = feature?.properties?.cell;
+        if (typeof raw === "string") {
+          setHover({
+            x: e.point.x,
+            y: e.point.y,
+            cell: JSON.parse(raw) as OpportunityCell,
+          });
+        }
+      });
+      map.on("mouseleave", GRID_LAYER_ID, () => {
+        setPointer(false);
+        setHover(null);
+      });
+
+      log.info("mapbox map initialized");
+    });
+
     return () => {
       map.remove();
       mapRef.current = null;
-      overlayRef.current = null;
     };
   }, []);
 
+  // Keep the GeoJSON sources in sync when hotels/cells props change.
   useEffect(() => {
-    if (!overlayRef.current) return;
-    overlayRef.current.setProps({
-      layers: [
-        new GridCellLayer<OpportunityCell>({
-          id: "opportunity-grid",
-          data: cells,
-          cellSize: 900,
-          extruded: false,
-          pickable: true,
-          getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
-          getFillColor: (d) => scoreColor(d.opportunityScore),
-          onHover: (info) =>
-            setHover(
-              info.object
-                ? { x: info.x, y: info.y, cell: info.object }
-                : null,
-            ),
-        }),
-        new ScatterplotLayer<Stay22Hotel>({
-          id: "hotels",
-          data: hotels,
-          pickable: true,
-          radiusMinPixels: 4,
-          radiusMaxPixels: 10,
-          getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
-          getFillColor: [30, 64, 175, 200],
-          onHover: (info) =>
-            setHover(
-              info.object
-                ? { x: info.x, y: info.y, hotel: info.object }
-                : null,
-            ),
-        }),
-      ],
-    });
-    log.debug("deck.gl layers updated", {
+    const map = mapRef.current;
+    if (!map) return;
+    const gridSource = map.getSource(GRID_SOURCE_ID) as
+      | mapboxgl.GeoJSONSource
+      | undefined;
+    gridSource?.setData(cellsToGeoJson(cells));
+    const hotelsSource = map.getSource(HOTELS_SOURCE_ID) as
+      | mapboxgl.GeoJSONSource
+      | undefined;
+    hotelsSource?.setData(hotelsToGeoJson(hotels));
+    log.debug("map sources updated", {
       hotels: hotels.length,
       cells: cells.length,
     });
