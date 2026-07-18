@@ -8,11 +8,12 @@
     "build": "tsc --noEmit",
     "type-check": "tsc --noEmit",
     "start": "tsx src/index.ts",
-    "smoke": "tsx src/scripts/engineSmoke.ts"
+    "smoke": "tsx src/scripts/engineSmoke.ts",
+    "seed:locations": "tsx src/scripts/seedLocations.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
-    "@innsight/config": "*",
+    "@innsight/config": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",

@@ -11,3 +11,5 @@ coverage/
 .config/
 CLAUDE.md
 .venv/
+pnpm-lock.yaml
+pnpm-workspace.yaml
