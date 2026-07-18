@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ConsultantPanel } from "../../components/consultant/ConsultantPanel";
-import { DiscoverMap } from "../../components/discover/DiscoverMap";
+import { DiscoverMap, type PlacedPin } from "../../components/discover/DiscoverMap";
+import { DiscoverSidebar } from "../../components/discover/DiscoverSidebar";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
 import { useAIConsultant } from "../../contexts/AIConsultantContext";
 import { ApiError } from "../../lib/api/client";
@@ -10,6 +12,11 @@ import { hotelsApi } from "../../lib/api/hotels";
 import { locationsApi } from "../../lib/api/locations";
 import type { OpportunityCell, Stay22Hotel } from "../../lib/api/schemas";
 import { log } from "../../lib/log";
+import {
+  hotelToConfig,
+  placedHotelConfig,
+  storeSandboxHandoff,
+} from "../../lib/sandboxHandoff";
 
 // Special value requesting the opportunity grid over every place with
 // scraped hotel inventory (see api/src/routes/locations.ts), instead of a
@@ -23,11 +30,17 @@ const GRID_SCOPE = "nationwide";
 const CANADA_BBOX = "-141.0,41.6,-52.6,83.1";
 
 export default function DiscoverPage() {
+  const router = useRouter();
   const { open } = useAIConsultant();
   const [hotels, setHotels] = useState<Stay22Hotel[]>([]);
   const [cells, setCells] = useState<OpportunityCell[]>([]);
   const [hotelError, setHotelError] = useState<string | null>(null);
   const [gridError, setGridError] = useState<string | null>(null);
+
+  // Sidebar selection state: at most one of these is active at a time.
+  const [selectedHotel, setSelectedHotel] = useState<Stay22Hotel | null>(null);
+  const [placedPin, setPlacedPin] = useState<PlacedPin | null>(null);
+  const [newHotelName, setNewHotelName] = useState("");
 
   useEffect(() => {
     // Guards against React 18 Strict Mode's dev-mode double effect
@@ -69,60 +82,115 @@ export default function DiscoverPage() {
     };
   }, []);
 
+  function handleSelectHotel(hotel: Stay22Hotel) {
+    setPlacedPin(null);
+    setSelectedHotel(hotel);
+  }
+
+  function handlePlaceHotel(coords: PlacedPin) {
+    setSelectedHotel(null);
+    setNewHotelName("");
+    setPlacedPin(coords);
+  }
+
+  function closeSidebar() {
+    setSelectedHotel(null);
+    setPlacedPin(null);
+  }
+
+  function configureExistingHotel() {
+    if (!selectedHotel) return;
+    storeSandboxHandoff({
+      label: selectedHotel.name,
+      origin: "existing",
+      config: hotelToConfig(selectedHotel),
+    });
+    router.push("/sandbox");
+  }
+
+  function configurePlacedHotel() {
+    if (!placedPin) return;
+    const name = newHotelName.trim();
+    if (!name) return;
+    storeSandboxHandoff({
+      label: name,
+      origin: "new",
+      config: placedHotelConfig(placedPin),
+    });
+    router.push("/sandbox");
+  }
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-6 py-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Market Discovery — Canada</h1>
-          <p className="text-sm text-slate-600">
-            Hotel markers are Stay22 inventory across Canada (periodically
-            refreshed); the opportunity heatmap covers every place with
-            hotel inventory and shows estimated opportunity scores
-            (simulation, not real financial data — Toronto uses real local
-            input data, other areas use generic baseline assumptions).
-          </p>
+    <div className="relative h-full w-full">
+      <DiscoverMap
+        hotels={hotels}
+        cells={cells}
+        selectedHotelId={selectedHotel?.id ?? null}
+        placedPin={placedPin}
+        onSelectHotel={handleSelectHotel}
+        onPlaceHotel={handlePlaceHotel}
+      />
+
+      {/* Floating header / hints over the map. */}
+      <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-md">
+        <div className="pointer-events-auto rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-sm font-bold text-slate-900">
+                Market Discovery — Canada
+              </h1>
+              <p className="mt-0.5 text-xs text-slate-600">
+                Click a hotel marker to inspect it, or click anywhere to drop a
+                new hotel. Opportunity scores are simulation estimates.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={open}
+              className="shrink-0 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-100"
+            >
+              AI Consultant
+            </button>
+          </div>
+
+          {hotelError ? (
+            <div className="mt-2">
+              <ErrorBanner
+                errorCode={hotelError}
+                message={
+                  hotelError === "network_error"
+                    ? "Could not reach the Innsight API — is it running on port 4000?"
+                    : "Hotels could not be loaded. If Stay22 is not configured, the map shows no hotels."
+                }
+              />
+            </div>
+          ) : null}
+          {gridError ? (
+            <div className="mt-2">
+              <ErrorBanner
+                errorCode={gridError}
+                message={
+                  gridError === "database_unavailable"
+                    ? "MongoDB is not configured — the opportunity heatmap needs it (README → Setup checklist → MongoDB Atlas)."
+                    : "Opportunity grid could not be loaded."
+                }
+              />
+            </div>
+          ) : null}
         </div>
-        <button
-          type="button"
-          onClick={open}
-          className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100"
-        >
-          AI Consultant
-        </button>
       </div>
 
-      {hotelError ? (
-        <ErrorBanner
-          errorCode={hotelError}
-          message={
-            hotelError === "network_error"
-              ? "Could not reach the Innsight API — is it running on port 4000?"
-              : "Hotels could not be loaded. If Stay22 is not configured, the map shows no hotels."
-          }
-        />
-      ) : null}
-      {hotels.length === 0 && !hotelError ? (
-        <p className="text-sm text-slate-500">
-          No hotels loaded yet. If this persists, Stay22 may not be
-          configured (README → Setup checklist → Stay22), or live
-          availability for the current date window may be sparse.
-        </p>
-      ) : null}
-      {gridError ? (
-        <ErrorBanner
-          errorCode={gridError}
-          message={
-            gridError === "database_unavailable"
-              ? "MongoDB is not configured — the opportunity heatmap needs it (README → Setup checklist → MongoDB Atlas)."
-              : "Opportunity grid could not be loaded."
-          }
-        />
-      ) : null}
+      <DiscoverSidebar
+        selectedHotel={selectedHotel}
+        placedPin={placedPin}
+        newHotelName={newHotelName}
+        onNewHotelNameChange={setNewHotelName}
+        onConfigureHotel={configureExistingHotel}
+        onConfigurePlaced={configurePlacedHotel}
+        onClose={closeSidebar}
+      />
 
-      <div className="h-[560px]">
-        <DiscoverMap hotels={hotels} cells={cells} />
-      </div>
       <ConsultantPanel context={{ view: "discover", city: "toronto" }} />
-    </main>
+    </div>
   );
 }

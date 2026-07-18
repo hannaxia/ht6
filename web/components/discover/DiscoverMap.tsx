@@ -21,6 +21,11 @@ const ONTARIO_ZOOM = 4.4;
 // Frontend duplicates this locally since web/ and api/ are separate deployables.
 const TORONTO_BBOX = { north: 43.78, south: 43.58, east: -79.12, west: -79.64 };
 
+export interface PlacedPin {
+  lat: number;
+  lng: number;
+}
+
 interface Hover {
   x: number;
   y: number;
@@ -37,15 +42,30 @@ function scoreColor(score: number): [number, number, number, number] {
 export function DiscoverMap({
   hotels,
   cells,
+  selectedHotelId,
+  placedPin,
+  onSelectHotel,
+  onPlaceHotel,
 }: {
   hotels: Stay22Hotel[];
   cells: OpportunityCell[];
+  selectedHotelId?: string | null;
+  placedPin?: PlacedPin | null;
+  onSelectHotel?: (hotel: Stay22Hotel) => void;
+  onPlaceHotel?: (coords: PlacedPin) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
-  const [pinned, setPinned] = useState<Hover | null>(null);
+
+  // Keep the latest callbacks/props in refs so the overlay click handler
+  // (registered in a separate effect) always sees current values without
+  // re-registering on every render.
+  const onSelectHotelRef = useRef(onSelectHotel);
+  const onPlaceHotelRef = useRef(onPlaceHotel);
+  onSelectHotelRef.current = onSelectHotel;
+  onPlaceHotelRef.current = onPlaceHotel;
 
   // Never touch the Mapbox SDK without a token.
   useEffect(() => {
@@ -83,16 +103,21 @@ export function DiscoverMap({
 
   useEffect(() => {
     if (!overlayRef.current) return;
+    const placedLayerData = placedPin ? [placedPin] : [];
     overlayRef.current.setProps({
+      getCursor: ({ isDragging, isHovering }) =>
+        isDragging ? "grabbing" : isHovering ? "pointer" : "crosshair",
       onClick: (info) => {
+        // Clicking an existing hotel marker selects it.
         if (info.layer?.id === "hotels" && info.object) {
-          setPinned({
-            x: info.x,
-            y: info.y,
-            hotel: info.object as Stay22Hotel,
-          });
-        } else {
-          setPinned(null);
+          onSelectHotelRef.current?.(info.object as Stay22Hotel);
+          return;
+        }
+        // Clicking anywhere else on the map drops a new-hotel pin there.
+        const lng = info.coordinate?.[0];
+        const lat = info.coordinate?.[1];
+        if (lng !== undefined && lat !== undefined) {
+          onPlaceHotelRef.current?.({ lat, lng });
         }
       },
       layers: [
@@ -116,9 +141,17 @@ export function DiscoverMap({
           data: hotels,
           pickable: true,
           radiusMinPixels: 4,
-          radiusMaxPixels: 10,
+          radiusMaxPixels: 12,
           getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
-          getFillColor: [30, 64, 175, 200],
+          getRadius: (d) => (d.id === selectedHotelId ? 12 : 6),
+          getFillColor: (d) =>
+            d.id === selectedHotelId
+              ? [217, 119, 6, 255]
+              : [30, 64, 175, 200],
+          updateTriggers: {
+            getFillColor: selectedHotelId,
+            getRadius: selectedHotelId,
+          },
           onHover: (info) =>
             setHover(
               info.object
@@ -126,30 +159,36 @@ export function DiscoverMap({
                 : null,
             ),
         }),
+        new ScatterplotLayer<PlacedPin>({
+          id: "placed-pin",
+          data: placedLayerData,
+          pickable: false,
+          radiusMinPixels: 8,
+          radiusMaxPixels: 16,
+          stroked: true,
+          lineWidthMinPixels: 2,
+          getPosition: (d) => [d.lng, d.lat],
+          getRadius: 12,
+          getFillColor: [16, 185, 129, 230],
+          getLineColor: [255, 255, 255, 255],
+        }),
       ],
     });
     log.debug("deck.gl layers updated", {
       hotels: hotels.length,
       cells: cells.length,
+      placed: placedLayerData.length,
     });
-  }, [hotels, cells]);
+  }, [hotels, cells, selectedHotelId, placedPin]);
 
   if (!MAPBOX_TOKEN) return <MapNotConfigured />;
 
   return (
-    <div className="relative h-full min-h-[420px] w-full overflow-hidden rounded border border-slate-200">
+    <div className="relative h-full w-full overflow-hidden">
       <div ref={containerRef} className="h-full w-full" />
-      {pinned?.hotel ? (
-        <div
-          className="absolute z-10"
-          style={{ left: pinned.x + 8, top: pinned.y + 8 }}
-        >
-          <HotelMarkerTooltip hotel={pinned.hotel} />
-        </div>
-      ) : null}
       {hover ? (
         <div
-          className="absolute z-20"
+          className="pointer-events-none absolute z-20"
           style={{ left: hover.x + 8, top: hover.y + 8 }}
         >
           {hover.hotel ? <HotelMarkerTooltip hotel={hover.hotel} /> : null}

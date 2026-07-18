@@ -14,35 +14,22 @@ import type {
   SimulateHotelOutput,
 } from "../../lib/api/schemas";
 import { simulationsApi } from "../../lib/api/simulations";
+import {
+  consumeSandboxHandoff,
+  DEFAULT_CONFIG,
+} from "../../lib/sandboxHandoff";
 import { createInFlightDebouncer } from "../../lib/debounce";
 import { log } from "../../lib/log";
-
-const DEFAULT_CONFIG: HotelConfigPayload = {
-  hotelType: "midscale",
-  rooms: 150,
-  stars: 4,
-  modernity: 0.7,
-  renovationDelta: 0,
-  amenities: ["wifi", "breakfast"],
-  targetSegment: "mixed",
-  basePrice: 180,
-  segmentAdrNorm: 200,
-  location: {
-    type: "downtown",
-    scores: { transit: 0.8, airport: 0.4, tourism: 0.7, business: 0.7 },
-    coordinates: { lat: 43.6532, lng: -79.3832 },
-    baseDemand: 68,
-    locationDemand: 6,
-    locationSatisfaction: 0.15,
-  },
-  competitors: [],
-  baseRating: 3.5,
-};
 
 export default function SandboxPage() {
   const { open, lastDeltas } = useAIConsultant();
   const { sessionId } = useSession();
   const [config, setConfig] = useState<HotelConfigPayload>(DEFAULT_CONFIG);
+  const [hotelLabel, setHotelLabel] = useState<string | null>(null);
+  // Gates the first simulation until we've checked for a Market Discovery
+  // handoff, so we never fire a throwaway simulation for the default config
+  // (which the in-flight debouncer could let win over the real handoff).
+  const [handoffResolved, setHandoffResolved] = useState(false);
   const [metrics, setMetrics] = useState<SimulateHotelOutput | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const debouncer = useRef(
@@ -79,23 +66,42 @@ export default function SandboxPage() {
     [sessionId],
   );
 
-  // Run an initial simulation once the session hydrates.
+  // On mount, pick up a config handed off from Market Discovery (selecting an
+  // existing hotel or dropping a new-hotel pin). Falls back to DEFAULT_CONFIG
+  // for a direct visit to /sandbox.
   useEffect(() => {
-    if (sessionId === "ssr") return;
+    const handoff = consumeSandboxHandoff();
+    if (handoff) {
+      setConfig(handoff.config);
+      setHotelLabel(handoff.label);
+      log.info("sandbox config from discovery handoff", handoff.origin);
+    }
+    setHandoffResolved(true);
+  }, []);
+
+  // Simulate whenever the config changes, once the session has hydrated and
+  // the handoff has been resolved. config is the single source of truth; the
+  // in-flight debouncer coalesces rapid edits.
+  useEffect(() => {
+    if (sessionId === "ssr" || !handoffResolved) return;
     void simulate(config);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, handoffResolved, config]);
 
   function handleChange(next: HotelConfigPayload) {
     setConfig(next);
-    void simulate(next);
   }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-6 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Hotel Sandbox</h1>
+          <h1 className="text-xl font-bold">
+            Hotel Sandbox
+            {hotelLabel ? (
+              <span className="text-slate-400"> — {hotelLabel}</span>
+            ) : null}
+          </h1>
           <p className="text-sm text-slate-600">
             Configure a hotel and watch the estimated metrics update. All
             values are simulation estimates.
