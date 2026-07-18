@@ -36,7 +36,7 @@ export function DiscoverSidebar({
   if (!selectedHotel && !selectedSaved && !placedPin) return null;
 
   const title = selectedHotel
-    ? "Hotel details"
+    ? "Hotel Details"
     : selectedSaved
       ? "Saved hotel"
       : "New hotel";
@@ -116,7 +116,7 @@ function SavedDetails({ saved }: { saved: SavedHotel }) {
       </div>
 
       <dl className="grid grid-cols-2 gap-2">
-        <Stat label="Type" value={config.hotelType.replace(/_/g, " ")} />
+        <Stat label="Type" value={titleCase(config.hotelType.replace(/_/g, " "))} />
         <Stat label="Stars" value={`${config.stars}★`} />
         <Stat label="Rooms" value={String(config.rooms)} />
         <Stat label="Base price" value={`$${Math.round(config.basePrice)}`} />
@@ -134,7 +134,7 @@ function SavedDetails({ saved }: { saved: SavedHotel }) {
             />
           ) : null}
           {metrics.rating !== undefined ? (
-            <Stat label="Rating" value={`${metrics.rating.toFixed(1)}/5`} />
+            <Stat label="Rating" value={`${metrics.rating.toFixed(1)}/5.0`} />
           ) : null}
         </dl>
       ) : null}
@@ -148,7 +148,7 @@ function SavedDetails({ saved }: { saved: SavedHotel }) {
                 key={a}
                 className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
               >
-                {a.replace(/_/g, " ")}
+                {titleCase(a.replace(/_/g, " "))}
               </span>
             ))}
           </div>
@@ -192,7 +192,7 @@ function HotelDetails({ hotel }: { hotel: Stay22Hotel }) {
           <Stat label="Stars" value={`${hotel.stars}★`} />
         ) : null}
         {hotel.rating !== undefined ? (
-          <Stat label="Guest rating" value={`${hotel.rating.toFixed(1)}/5`} />
+          <Stat label="Guest rating" value={`${hotel.rating.toFixed(1)}/5.0`} />
         ) : null}
         {hotel.price ? (
           <Stat label="Price" value={priceCad(hotel.price)} />
@@ -208,7 +208,7 @@ function HotelDetails({ hotel }: { hotel: Stay22Hotel }) {
                 key={a}
                 className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
               >
-                {a.replace(/_/g, " ")}
+                {titleCase(a.replace(/_/g, " "))}
               </span>
             ))}
           </div>
@@ -265,6 +265,8 @@ function PlacedForm({
     </div>
   );
 }
+
+
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
