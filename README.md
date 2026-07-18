@@ -27,7 +27,11 @@ files to keep in sync.
 
 This is an **npm workspaces** monorepo — one `npm install` at the root wires
 up `web`, `api`, and `packages/config` together (via the root `workspaces`
-field in `package.json`), no other package manager needed.
+field in `package.json`), no other package manager needed. The ML layer
+(`ml/`) is a separate Python project using its own venv — see `ml/README.md`
+for training; `npm run dev` below only *runs* the already-trained models
+(`ml/models/*.pkl` must exist — run `ml/training/train_*.py` first if
+`ml/models/` is empty).
 
 ```bash
 # 1. Install all workspace dependencies
@@ -37,19 +41,26 @@ npm install
 cp .env.example .env
 
 # 3. Run everything with one command
-npm run dev     # API on http://localhost:4000, web on http://localhost:3000
+npm run dev     # ML service :8000, API :4000, web :3000
 ```
 
-`npm run dev` runs both dev servers in parallel in the same terminal (via
-`concurrently`, prefixed `[api]`/`[web]`). Only run one `npm run dev` at a
-time — starting a second one while the first is still up will fail to bind
-ports 3000/4000 rather than replacing it. `Ctrl+C` stops both.
+`npm run dev` runs all three in parallel in the same terminal (via
+`concurrently`, prefixed `[ml]`/`[api]`/`[web]`). Only run one `npm run dev`
+at a time — starting a second one while the first is still up will fail to
+bind the ports rather than replacing it. `Ctrl+C` stops all three. If the
+Python venv isn't set up yet (`.venv/` missing or `ml/models/` empty), the
+`[ml]` process will fail to start or return errors — the API detects this
+automatically and falls back to its deterministic formula engine (see
+"ML service integration" in `ml/README.md`), so a missing ML service never
+blocks the app, it just means ADR/occupancy/rating come from the built-in
+formulas instead of the trained models.
 
 If you'd rather run them in separate terminals:
 
 ```bash
-npm run dev -w api      # Express API on http://localhost:4000
-npm run dev -w web      # Next.js on http://localhost:3000
+npm run dev:ml           # Python ML service on http://localhost:8000
+npm run dev -w api       # Express API on http://localhost:4000
+npm run dev -w web       # Next.js on http://localhost:3000
 ```
 
 The stack **boots and runs with an empty `.env`** in degraded mode: the map
@@ -154,6 +165,7 @@ hotel data as a substitute.**
 | `PORT` | api | API port (default 4000) |
 | `LOG_LEVEL` | api | pino level (default `info`) |
 | `FRONTEND_ORIGIN` | api | CORS allowlist (default `http://localhost:3000`) |
+| `ML_SERVICE_URL` | api | Python ML service base URL (default `http://localhost:8000`). Optional — see `ml/README.md` |
 | `MAPBOX_ACCESS_TOKEN` / `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | web | Mapbox GL map tiles |
 | `NEXT_PUBLIC_BACKEND_URL` | web | API base URL (default `http://localhost:4000`) |
 | `NEXT_PUBLIC_DEBUG` | web | `true` enables verbose browser logging |
@@ -173,3 +185,9 @@ hotel data as a substitute.**
   segment-weighted competition): see `CLAUDE.md` — the engine in
   `api/src/simulation/` implements it directly, with all tunable constants in
   `packages/config/`.
+- **ML integration:** ADR, occupancy, and rating each try the trained model
+  (`ml/service/`, `api/src/ml/mlClient.ts`) first and fall back to the
+  deterministic formula on any failure — see `ml/README.md` "ML service
+  integration" for the fallback design and the documented approximations in
+  the HotelConfig → ML feature mapping. Revenue and CapEx/ROI/Payback are
+  always deterministic; there's no model or dataset for either.

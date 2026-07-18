@@ -94,6 +94,9 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
     url.searchParams.set("checkout", checkout);
     url.searchParams.set("pageSize", String(DEFAULT_PAGE_SIZE));
     url.searchParams.set("page", String(page));
+    // Innsight is a Canada-focused product — ask Stay22 for CAD directly
+    // (their own live FX) rather than converting USD ourselves.
+    url.searchParams.set("currency", "CAD");
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
     const controller = new AbortController();
