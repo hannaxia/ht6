@@ -11,6 +11,7 @@ import { useSession } from "../../contexts/SessionContext";
 import { ApiError } from "../../lib/api/client";
 import type {
   HotelConfigPayload,
+  InvestmentMode,
   SimulateHotelOutput,
 } from "../../lib/api/schemas";
 import { savedHotelsApi } from "../../lib/api/savedHotels";
@@ -36,6 +37,13 @@ export default function SandboxPage() {
   const [nameDraft, setNameDraft] = useState("");
   // Save-to-profile state.
   const [savedHotelId, setSavedHotelId] = useState<string | null>(null);
+  const [investmentMode, setInvestmentMode] =
+    useState<InvestmentMode>("new_build");
+  const [startingConfig, setStartingConfig] =
+    useState<HotelConfigPayload>(DEFAULT_CONFIG);
+  const [baselineAnnualProfit, setBaselineAnnualProfit] = useState<number | null>(
+    null,
+  );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveErrorCode, setSaveErrorCode] = useState<string | null>(null);
   // Gates the first simulation until we've checked for a Market Discovery
@@ -61,8 +69,23 @@ export default function SandboxPage() {
           const response = await simulationsApi.create(
             latest,
             sessionId,
-            metricsRef.current,
+            {
+              beforeMetrics: metricsRef.current,
+              investmentMode,
+              startingConfig,
+              baselineAnnualOperatingProfit:
+                investmentMode === "upgrade"
+                  ? (baselineAnnualProfit ?? undefined)
+                  : undefined,
+            },
           );
+          if (
+            investmentMode === "upgrade" &&
+            baselineAnnualProfit === null &&
+            Number.isFinite(response.result.annualOperatingProfit)
+          ) {
+            setBaselineAnnualProfit(response.result.annualOperatingProfit);
+          }
           setErrorCode(null);
           return response.result;
         } catch (err) {
@@ -75,7 +98,7 @@ export default function SandboxPage() {
       });
       if (result) setMetrics(result);
     },
-    [sessionId],
+    [sessionId, investmentMode, startingConfig, baselineAnnualProfit],
   );
 
   // On mount, pick up a config handed off from Market Discovery (selecting an
@@ -87,12 +110,23 @@ export default function SandboxPage() {
       setConfig(handoff.config);
       setHotelLabel(handoff.label);
       setIsCustom(handoff.isCustom);
+      setStartingConfig(handoff.config);
+      const mode: InvestmentMode =
+        handoff.origin === "existing" ||
+        (handoff.origin === "saved" && !handoff.isCustom)
+          ? "upgrade"
+          : "new_build";
+      setInvestmentMode(mode);
+      setBaselineAnnualProfit(null);
       if (handoff.savedHotelId) setSavedHotelId(handoff.savedHotelId);
       log.info("sandbox config from discovery handoff", handoff.origin);
     } else {
       // Direct visit to /sandbox with no handoff — DEFAULT_CONFIG stands in
       // for a from-scratch hotel, so it's nameable like a placed pin.
       setHotelLabel("New hotel");
+      setStartingConfig(DEFAULT_CONFIG);
+      setInvestmentMode("new_build");
+      setBaselineAnnualProfit(null);
     }
     setHandoffResolved(true);
   }, []);

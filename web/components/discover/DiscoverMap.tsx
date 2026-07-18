@@ -291,8 +291,12 @@ export function DiscoverMap({
                 id: "opportunity-field",
                 image: bitmap.image,
                 bounds: bitmap.bounds,
-                opacity: 0.62,
+                opacity: 0.5,
                 pickable: false,
+                // Draw as a pure background: don't test or write depth, so
+                // the hotel/saved dots (drawn after, at the same z-plane)
+                // are never depth-culled where they overlap the heatmap.
+                parameters: { depthCompare: "always", depthWriteEnabled: false },
               }),
             ]
           : []),

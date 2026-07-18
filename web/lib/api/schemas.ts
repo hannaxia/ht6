@@ -142,6 +142,7 @@ export type SimulateHotelOutput = z.infer<typeof simulateHotelOutputSchema>;
 export type OpportunityCell = z.infer<typeof opportunityCellSchema>;
 export type AiConsultResponse = z.infer<typeof aiConsultResponseSchema>;
 export type LocationContext = z.infer<typeof locationContextResponseSchema>;
+export type InvestmentMode = "new_build" | "upgrade";
 
 /** The sandbox hotel configuration sent to POST /simulations. */
 export const hotelConfigPayloadSchema = z.object({

@@ -13,6 +13,7 @@ import { priceExpectationPenalty, ratingFormula } from "./rating.js";
 import { revenueFormula } from "./revenue.js";
 import type {
   HotelConfig,
+  InvestmentMode,
   OpportunityCell,
   OpportunityGridInput,
   SimulateHotelOutput,
@@ -22,7 +23,17 @@ export const DISCLAIMER =
   "All predicted metrics are simulation estimates and not real financial data.";
 
 export interface SimulationEngine {
-  simulateHotel(input: HotelConfig): Promise<SimulateHotelOutput>;
+  simulateHotel(
+    input: HotelConfig,
+    options?: {
+      investmentMode?: InvestmentMode;
+      startingConfig?: Pick<
+        HotelConfig,
+        "hotelType" | "stars" | "rooms" | "amenities" | "renovationDelta"
+      >;
+      baselineAnnualOperatingProfit?: number;
+    },
+  ): Promise<SimulateHotelOutput>;
   computeOpportunityGrid(input: OpportunityGridInput): OpportunityCell[];
 }
 
@@ -47,7 +58,17 @@ export function createSimulationEngine(
      * CapEx/ROI/Payback are always deterministic — there's no ML model for
      * either (see ml/README.md: no cost/investment dataset exists).
      */
-    async simulateHotel(input: HotelConfig): Promise<SimulateHotelOutput> {
+    async simulateHotel(
+      input: HotelConfig,
+      options?: {
+        investmentMode?: InvestmentMode;
+        startingConfig?: Pick<
+          HotelConfig,
+          "hotelType" | "stars" | "rooms" | "amenities" | "renovationDelta"
+        >;
+        baselineAnnualOperatingProfit?: number;
+      },
+    ): Promise<SimulateHotelOutput> {
       // 1. Location & quality scores (user-set inputs only)
       const locMult = locationMultiplier(input.location.scores);
       const qualMult = qualityMultiplier(input.stars, input.modernity);
@@ -127,7 +148,11 @@ export function createSimulationEngine(
       }
 
       // 8. CapEx / ROI / Payback — always deterministic, see docstring above
-      const investment = investmentFormula(input, config.costTable);
+      const investmentMode = options?.investmentMode ?? "new_build";
+      const investment = investmentFormula(input, config.costTable, {
+        mode: investmentMode,
+        startingConfig: options?.startingConfig,
+      });
       const annualOperatingProfit = revenue * config.operatingMargin;
       if (annualOperatingProfit === 0) {
         log.warn(
@@ -135,8 +160,14 @@ export function createSimulationEngine(
           "annual operating profit is zero — payback is infinite, roi is zero",
         );
       }
-      const roiValue = roi(annualOperatingProfit, investment);
-      const paybackYears = payback(annualOperatingProfit, investment);
+      const upliftProfit =
+        investmentMode === "upgrade" &&
+        typeof options?.baselineAnnualOperatingProfit === "number" &&
+        Number.isFinite(options.baselineAnnualOperatingProfit)
+          ? Math.max(0, annualOperatingProfit - options.baselineAnnualOperatingProfit)
+          : annualOperatingProfit;
+      const roiValue = roi(upliftProfit, investment);
+      const paybackYears = payback(upliftProfit, investment);
 
       const output: SimulateHotelOutput = {
         adr,
@@ -166,6 +197,8 @@ export function createSimulationEngine(
           investment,
           roi: roiValue,
           paybackYears,
+          investmentMode,
+          roiProfitBasis: upliftProfit,
           adrSource,
           occupancySource,
           ratingSource,

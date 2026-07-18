@@ -30,6 +30,10 @@ export async function runAndPersistSimulation(
   const output = await engine.simulateHotel({
     ...request.config,
     competitors: request.config.competitors ?? [],
+  }, {
+    investmentMode: request.investmentMode,
+    startingConfig: request.startingConfig,
+    baselineAnnualOperatingProfit: request.baselineAnnualOperatingProfit,
   });
 
   const validated = simulateHotelOutputSchema.safeParse(output);

@@ -2,11 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ConsultantPanel } from "../../components/consultant/ConsultantPanel";
 import { DiscoverMap, type PlacedPin } from "../../components/discover/DiscoverMap";
 import { DiscoverSidebar } from "../../components/discover/DiscoverSidebar";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
-import { useAIConsultant } from "../../contexts/AIConsultantContext";
 import { useSession } from "../../contexts/SessionContext";
 import { ApiError } from "../../lib/api/client";
 import { hotelsApi } from "../../lib/api/hotels";
@@ -44,7 +42,6 @@ const CANADA_BBOX = "-141.0,41.6,-52.6,83.1";
 
 export default function DiscoverPage() {
   const router = useRouter();
-  const { open } = useAIConsultant();
   const { sessionId, isAuthenticated } = useSession();
   const [hotels, setHotels] = useState<Stay22Hotel[]>([]);
   const [cells, setCells] = useState<OpportunityCell[]>([]);
@@ -252,23 +249,16 @@ export default function DiscoverPage() {
       {/* Floating header / hints over the map. */}
       <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-md">
         <div className="pointer-events-auto rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-sm font-bold text-slate-900">
-                Market Discovery — Canada
-              </h1>
-              <p className="mt-0.5 text-xs text-slate-600">
-                Click a hotel marker to inspect it, or click anywhere to drop a
-                new hotel. Opportunity scores are simulation estimates.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={open}
-              className="shrink-0 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-100"
-            >
-              AI Consultant
-            </button>
+          <div>
+            <h1 className="text-sm font-bold text-slate-900">
+              Market Discovery
+            </h1>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Each dot represents a hotel. Click a hotel to inspect it, or click
+              anywhere to drop a new hotel. The heatmap shows areas with higher
+              and lower opportunity for a new hotel, based on factors like
+              competition.
+            </p>
           </div>
 
           {hotelError ? (
@@ -310,8 +300,6 @@ export default function DiscoverPage() {
         onConfigurePlaced={configurePlacedHotel}
         onClose={closeSidebar}
       />
-
-      <ConsultantPanel context={{ view: "discover", city: "toronto" }} />
     </div>
   );
 }
