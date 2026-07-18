@@ -87,10 +87,28 @@ export interface OpportunityGridInput {
     lat: number;
     lng: number;
   }) => OpportunityCellContext;
+  /**
+   * Explicit list of cell centers (with per-cell half-degree size) to
+   * score, overriding the default even NxN grid derived from
+   * cityBbox/gridSize. Used for the nationwide grid, where cells are
+   * anchored to where hotels actually exist (a fine, evenly-spaced grid
+   * over a whole-country bbox would be almost entirely empty land/water)
+   * and different places can use different grid densities.
+   */
+  cellCoordinates?: {
+    lat: number;
+    lng: number;
+    cellHalfDegLat: number;
+    cellHalfDegLng: number;
+  }[];
 }
 
 export interface OpportunityCell {
   coordinates: { lat: number; lng: number };
+  /** Half-width/height of this cell in degrees — lets renderers draw exact
+   * edge-to-edge tiles instead of guessing a fixed size. */
+  cellHalfDegLat: number;
+  cellHalfDegLng: number;
   components: {
     revenuePotential: number;
     demand: number;
