@@ -19,10 +19,17 @@ const BY_TYPE: Record<HotelConfigPayload["hotelType"], BuildingModel> = {
   budget: "Building_1",
   midscale: "Building_6",
   upscale: "Building_4",
-  luxury: "Building_2",
-  resort: "Building_5",
+  luxury: "Building_9",
+  resort: "Building_8",
   extended_stay: "Building_3",
 };
+
+/** Resolve the model file (without extension) for a hotel type alone. */
+export function modelForHotelType(
+  hotelType: HotelConfigPayload["hotelType"],
+): BuildingModel {
+  return BY_TYPE[hotelType] ?? "Building_6";
+}
 
 /** Resolve the model file (without extension) for a given hotel config. */
 export function modelForConfig(config: {

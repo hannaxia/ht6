@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConsultantPanel } from "../../components/consultant/ConsultantPanel";
 import { ChangeSummary } from "../../components/sandbox/ChangeSummary";
@@ -21,6 +22,13 @@ import {
 } from "../../lib/sandboxHandoff";
 import { createInFlightDebouncer } from "../../lib/debounce";
 import { log } from "../../lib/log";
+
+// WebGL only runs in the browser — load the model client-side only.
+const SandboxModel = dynamic(
+  () =>
+    import("../../components/sandbox/SandboxModel").then((m) => m.SandboxModel),
+  { ssr: false },
+);
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -158,7 +166,7 @@ export default function SandboxPage() {
   }
 
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-6 py-8">
+    <main className="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-6 py-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold">
@@ -244,31 +252,40 @@ export default function SandboxPage() {
         />
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">
-            Configuration
-          </h2>
-          <SandboxForm config={config} onChange={handleChange} />
-        </section>
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">
-            Estimated metrics
-          </h2>
-          {metrics ? (
-            <MetricsPanel metrics={metrics} />
-          ) : (
-            <p className="text-sm text-slate-500">
-              Waiting for the first simulation… (requires the API and MongoDB —
-              see README → Setup checklist)
-            </p>
-          )}
-          {lastDeltas?.simulation && metrics ? (
-            <div className="mt-4">
-              <ChangeSummary before={metrics} after={lastDeltas.simulation} />
-            </div>
-          ) : null}
-        </section>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_1fr]">
+        {/* Left column: all the text — configuration, then metrics. */}
+        <div className="flex flex-col gap-6">
+          <section className="rounded border border-slate-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">
+              Configuration
+            </h2>
+            <SandboxForm config={config} onChange={handleChange} />
+          </section>
+          <section>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">
+              Estimated metrics
+            </h2>
+            {metrics ? (
+              <MetricsPanel metrics={metrics} />
+            ) : (
+              <p className="text-sm text-slate-500">
+                Waiting for the first simulation… (requires the API and MongoDB
+                — see README → Setup checklist)
+              </p>
+            )}
+            {lastDeltas?.simulation && metrics ? (
+              <div className="mt-4">
+                <ChangeSummary before={metrics} after={lastDeltas.simulation} />
+              </div>
+            ) : null}
+          </section>
+        </div>
+
+        {/* Right column: seamless 3D building (transparent, no panel). Wider
+            than the text column and auto-fit so the model is never clipped. */}
+        <div className="min-h-[420px] lg:min-h-[560px]">
+          <SandboxModel hotelType={config.hotelType} />
+        </div>
       </div>
       <ConsultantPanel
         context={{ view: "sandbox", hotelConfig: config, metrics }}
