@@ -109,7 +109,7 @@ export function createGeminiClient(
   }
   const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
   return genAI.getGenerativeModel({
-    model: env.GEMINI_MODEL ?? "gemini-1.5-pro",
+    model: env.GEMINI_MODEL ?? "gemini-flash-latest",
     systemInstruction: SYSTEM_INSTRUCTION,
     tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
     toolConfig: {

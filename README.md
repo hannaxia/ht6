@@ -25,19 +25,31 @@ files to keep in sync.
 
 ## Quick start
 
+This is an **npm workspaces** monorepo — one `npm install` at the root wires
+up `web`, `api`, and `packages/config` together (via the root `workspaces`
+field in `package.json`), no other package manager needed.
+
 ```bash
-# 1. Install pnpm if you don't have it
-npm install -g pnpm
+# 1. Install all workspace dependencies
+npm install
 
-# 2. Install all workspace dependencies
-pnpm install
-
-# 3. Create your env file (fill in keys later — the app boots without them)
+# 2. Create your env file (fill in keys later — the app boots without them)
 cp .env.example .env
 
-# 4. Run both apps (two terminals)
-pnpm --filter @innsight/api dev     # Express API on http://localhost:4000
-pnpm --filter @innsight/web dev     # Next.js on http://localhost:3000
+# 3. Run everything with one command
+npm run dev     # API on http://localhost:4000, web on http://localhost:3000
+```
+
+`npm run dev` runs both dev servers in parallel in the same terminal (via
+`concurrently`, prefixed `[api]`/`[web]`). Only run one `npm run dev` at a
+time — starting a second one while the first is still up will fail to bind
+ports 3000/4000 rather than replacing it. `Ctrl+C` stops both.
+
+If you'd rather run them in separate terminals:
+
+```bash
+npm run dev -w api      # Express API on http://localhost:4000
+npm run dev -w web      # Next.js on http://localhost:3000
 ```
 
 The stack **boots and runs with an empty `.env`** in degraded mode: the map
@@ -49,8 +61,8 @@ not configured". `GET http://localhost:4000/health` reports each dependency as
 Useful workspace commands:
 
 ```bash
-pnpm type-check     # TypeScript strict check across all workspaces
-pnpm build          # Build all workspaces
+npm run type-check     # TypeScript strict check across all workspaces
+npm run build           # Build all workspaces
 ```
 
 ## Setup checklist (work to be done outside this repo)
@@ -81,7 +93,9 @@ hotel data as a substitute.**
 1. Sign in at https://aistudio.google.com.
 2. Click **Get API key** → create key in a new project.
 3. Copy it into `GEMINI_API_KEY` in `.env`.
-4. Default model is `gemini-1.5-pro`; override with `GEMINI_MODEL` if needed.
+4. Default model is `gemini-flash-latest` (Google's rolling alias for their current
+   stable flash model — override with `GEMINI_MODEL` for a specific pinned version,
+   e.g. `gemini-2.5-pro` for more capability at higher latency/cost).
 
 ### Mapbox
 
@@ -125,7 +139,7 @@ hotel data as a substitute.**
 |---|---|---|
 | `STAY22_API_KEY` | api | Stay22 hotel market data |
 | `GEMINI_API_KEY` | api | AI consultant (Gemini) |
-| `GEMINI_MODEL` | api | Optional; defaults to `gemini-1.5-pro` |
+| `GEMINI_MODEL` | api | Optional; defaults to `gemini-flash-latest` |
 | `MONGODB_URI` | api | MongoDB Atlas connection string |
 | `PORT` | api | API port (default 4000) |
 | `LOG_LEVEL` | api | pino level (default `info`) |

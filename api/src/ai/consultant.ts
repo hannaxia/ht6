@@ -87,9 +87,14 @@ export function createAIConsultant(
           return parsed.data;
         }
 
-        const modelParts: Part[] = calls.map((call) => ({
-          functionCall: call,
-        }));
+        // Forward Gemini's own response parts verbatim rather than
+        // reconstructing them from functionCalls() — newer models attach a
+        // thoughtSignature to function-call parts that must be echoed back
+        // on the next turn, and rebuilding the parts ourselves silently
+        // drops it (400: "missing a thought_signature").
+        const candidateContent = response.candidates?.[0]?.content;
+        const modelParts: Part[] =
+          candidateContent?.parts ?? calls.map((call) => ({ functionCall: call }));
         history.push({ role: "model", parts: modelParts });
 
         const responseParts: Part[] = [];
