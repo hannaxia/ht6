@@ -6,3 +6,5 @@ joblib
 matplotlib
 pyarrow
 vaderSentiment
+fastapi
+uvicorn

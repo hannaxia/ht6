@@ -27,6 +27,31 @@ function minMaxNormalize(values: number[]): number[] | null {
 }
 
 /**
+ * Maps each value to its percentile position (0-100) within the array. Ties
+ * share the averaged (midrank) percentile so identical scores get identical
+ * colors. Robust to skew and outliers by construction — the output is always
+ * an even spread across [0, 100], which is exactly what a legible heatmap
+ * needs. A single value maps to 50 (no meaningful ranking with one point).
+ */
+function percentileRank(values: number[]): number[] {
+  const n = values.length;
+  if (n <= 1) return values.map(() => 50);
+  const order = values
+    .map((v, i) => ({ v, i }))
+    .sort((a, b) => a.v - b.v);
+  const result = new Array<number>(n);
+  let k = 0;
+  while (k < n) {
+    let j = k;
+    while (j < n && order[j]!.v === order[k]!.v) j++;
+    const pct = ((k + j - 1) / 2 / (n - 1)) * 100; // midrank of the tie group
+    for (let m = k; m < j; m++) result[order[m]!.i] = pct;
+    k = j;
+  }
+  return result;
+}
+
+/**
  * Three passes: raw components → min-max normalize to [0,100] → weighted sum.
  * Falls back to a uniform score of 50 when the grid is empty or any
  * component is constant across the grid.
@@ -162,27 +187,42 @@ export function computeOpportunityGrid(
     }));
   }
 
-  // Pass 3: weighted sum, clamped to [0, 100]
+  // Pass 3: weighted sum → percentile rank as the final 0-100 score.
+  //
+  // The weighted sum alone is min-max normalized per component, which across
+  // a nationwide grid is dominated by the single highest-opportunity metro —
+  // every other location collapses toward 0 and the old `Math.max(0, ...)`
+  // clamp then floored all the negatives, leaving ~96% of cells at exactly 0
+  // (a useless, uniformly-red heatmap). Percentile-ranking the raw weighted
+  // sum instead guarantees a full, evenly-spread 0-100 gradient regardless of
+  // how skewed the underlying distribution is, and is the more honest framing:
+  // opportunity here is inherently relative ("this location ranks above that
+  // one"), so the score literally *is* a percentile.
   const w = config.opportunityWeights;
-  const cells = rawCells.map((cell, i) => {
-    const normalized = {
+  const rawScores = rawCells.map((_, i) => {
+    const nr = normalizedByKey.revenuePotential![i]!;
+    const nd = normalizedByKey.demand![i]!;
+    const nc = normalizedByKey.segmentWeightedCompetition![i]!;
+    const nk = normalizedByKey.risk![i]!;
+    return (
+      w.revenuePotential * nr +
+      w.demand * nd -
+      w.segmentWeightedCompetition * nc -
+      w.risk * nk
+    );
+  });
+  const percentiles = percentileRank(rawScores);
+
+  const cells = rawCells.map((cell, i) => ({
+    ...cell,
+    normalized: {
       revenuePotential: normalizedByKey.revenuePotential![i]!,
       demand: normalizedByKey.demand![i]!,
-      segmentWeightedCompetition:
-        normalizedByKey.segmentWeightedCompetition![i]!,
+      segmentWeightedCompetition: normalizedByKey.segmentWeightedCompetition![i]!,
       risk: normalizedByKey.risk![i]!,
-    };
-    const score =
-      w.revenuePotential * normalized.revenuePotential +
-      w.demand * normalized.demand -
-      w.segmentWeightedCompetition * normalized.segmentWeightedCompetition -
-      w.risk * normalized.risk;
-    return {
-      ...cell,
-      normalized,
-      opportunityScore: Math.max(0, Math.min(100, score)),
-    };
-  });
+    },
+    opportunityScore: percentiles[i]!,
+  }));
   log.info(
     { cells: cells.length, candidateCells: cellCenters.length, skippedWaterCells },
     "opportunity grid computed",

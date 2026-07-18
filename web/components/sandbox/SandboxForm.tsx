@@ -13,8 +13,6 @@ const HOTEL_TYPES = [
   "extended_stay",
 ] as const;
 
-const SEGMENTS = ["leisure", "business", "mixed"] as const;
-
 export { AMENITIES };
 
 export function SandboxForm({
@@ -58,24 +56,6 @@ export function SandboxForm({
             {HOTEL_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t.replace("_", " ")}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label="Target audience">
-          <select
-            className={inputClass}
-            value={config.targetSegment}
-            onChange={(e) =>
-              set(
-                "targetSegment",
-                e.target.value as HotelConfigPayload["targetSegment"],
-              )
-            }
-          >
-            {SEGMENTS.map((s) => (
-              <option key={s} value={s}>
-                {s}
               </option>
             ))}
           </select>

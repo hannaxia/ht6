@@ -54,6 +54,8 @@ export const costTableSchema = z.object({
 
 export const operatingMarginSchema = z.number().finite().gt(0).lt(1);
 
+export const usdToCadRateSchema = z.number().finite().positive();
+
 export const riskWeightsSchema = z.object({
   volatility: finiteNumber.nonnegative(),
   relConstructionCost: finiteNumber.nonnegative(),
@@ -75,6 +77,7 @@ export const configSchema = z.object({
   operatingMargin: operatingMarginSchema,
   riskWeights: riskWeightsSchema,
   opportunityWeights: opportunityWeightsSchema,
+  usdToCadRate: usdToCadRateSchema,
 });
 
 export type LoadedConfig = z.infer<typeof configSchema>;

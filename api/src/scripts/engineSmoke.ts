@@ -3,15 +3,22 @@
  * hotel and asserts the core domain invariants from CLAUDE.md. Run with:
  *   pnpm --filter @innsight/api smoke
  * Exits non-zero on any failure.
+ *
+ * Uses an unconfigured MLClient (no base URL) so every prediction falls
+ * through to the deterministic formulas — this test asserts properties of
+ * those formulas specifically (e.g. "ADR is invariant to baseRating"),
+ * which the ML models have weaker/different guarantees around.
  */
 import { loadConfig } from "@innsight/config";
 import { pino } from "pino";
+import { createMLClient } from "../ml/mlClient.js";
 import { simulateHotelOutputSchema } from "../schemas/simulation.js";
 import { createSimulationEngine } from "../simulation/index.js";
 
 const logger = pino({ level: "warn" });
 const config = loadConfig(logger);
-const engine = createSimulationEngine(config, logger);
+const mlClient = createMLClient(undefined, logger);
+const engine = createSimulationEngine(config, logger, mlClient);
 
 let failures = 0;
 function check(name: string, pass: boolean, detail?: string) {
@@ -41,7 +48,7 @@ const base = {
   baseRating: 3.5,
 };
 
-const out = engine.simulateHotel(base);
+const out = await engine.simulateHotel(base);
 console.log("baseline metrics (all simulation estimates):", {
   adr: `$${out.adr.toFixed(2)}`,
   occupancy: `${out.occupancy.toFixed(1)}%`,
@@ -57,7 +64,7 @@ check(
   simulateHotelOutputSchema.safeParse(out).success,
 );
 
-const withCoworking = engine.simulateHotel({
+const withCoworking = await engine.simulateHotel({
   ...base,
   amenities: [...base.amenities, "coworking"],
 });
@@ -69,17 +76,17 @@ check(
 
 check(
   "ADR is invariant to baseRating (no circular dependency)",
-  engine.simulateHotel({ ...base, baseRating: 1.0 }).adr === out.adr,
+  (await engine.simulateHotel({ ...base, baseRating: 1.0 })).adr === out.adr,
 );
 
-const zeroRooms = engine.simulateHotel({ ...base, rooms: 0, amenities: [] });
+const zeroRooms = await engine.simulateHotel({ ...base, rooms: 0, amenities: [] });
 check(
   "zero rooms → zero revenue + infinite payback, no throw",
   zeroRooms.revenue === 0 &&
     zeroRooms.paybackYears === Number.POSITIVE_INFINITY,
 );
 
-const maxed = engine.simulateHotel({
+const maxed = await engine.simulateHotel({
   ...base,
   amenities: Object.keys(config.amenityImpactTable),
 });
@@ -89,7 +96,7 @@ check(
   `${maxed.intermediates.amenityImpactPct}pp with every amenity enabled`,
 );
 
-const sameSegment = engine.simulateHotel({
+const sameSegment = await engine.simulateHotel({
   ...base,
   competitors: [
     {
@@ -106,7 +113,7 @@ check(
   `${out.occupancy.toFixed(1)}% → ${sameSegment.occupancy.toFixed(1)}%`,
 );
 
-const budgetCompetitor = engine.simulateHotel({
+const budgetCompetitor = await engine.simulateHotel({
   ...base,
   competitors: [
     {
@@ -124,14 +131,14 @@ check(
   `${budgetCompetitor.intermediates.competitionPressure.toFixed(2)}pp vs ${sameSegment.intermediates.competitionPressure.toFixed(2)}pp`,
 );
 
-const overpriced = engine.simulateHotel({ ...base, basePrice: 500 });
+const overpriced = await engine.simulateHotel({ ...base, basePrice: 500 });
 check(
   "overpricing vs segment norm lowers rating",
   overpriced.rating < out.rating,
   `${out.rating.toFixed(2)} → ${overpriced.rating.toFixed(2)}`,
 );
 
-const renovated = engine.simulateHotel({
+const renovated = await engine.simulateHotel({
   ...base,
   modernity: 1,
   renovationDelta: 1,

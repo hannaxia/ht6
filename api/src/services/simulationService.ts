@@ -27,7 +27,7 @@ export async function runAndPersistSimulation(
   mongo: MongoConnection,
   logger: Logger,
 ): Promise<{ result: SimulateHotelOutput; simulationId: string }> {
-  const output = engine.simulateHotel({
+  const output = await engine.simulateHotel({
     ...request.config,
     competitors: request.config.competitors ?? [],
   });

@@ -44,6 +44,7 @@ export default function ProfilePage() {
       origin: "saved",
       config: hotel.config,
       savedHotelId: hotel.id,
+      isCustom: hotel.isCustom,
     });
     router.push("/sandbox");
   }
@@ -167,7 +168,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => viewOnMap(hotel)}
-                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-100"
+                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
                 >
                   View on map
                 </button>

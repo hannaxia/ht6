@@ -24,7 +24,7 @@ export const generateInvestmentReportTool: Tool<
   argsSchema,
   resultSchema,
   async handler(args, ctx) {
-    const output = ctx.engine.simulateHotel(args.config);
+    const output = await ctx.engine.simulateHotel(args.config);
     const paybackText = Number.isFinite(output.paybackYears)
       ? `${output.paybackYears.toFixed(1)} years`
       : "never (zero estimated operating profit)";
@@ -38,9 +38,9 @@ export const generateInvestmentReportTool: Tool<
       roi: output.roi,
       paybackYears: output.paybackYears,
       narrativeSummary:
-        `Estimated investment of $${Math.round(output.investment).toLocaleString()} ` +
+        `Estimated investment of $${Math.round(output.investment).toLocaleString()} CAD ` +
         `for a ${args.config.rooms}-room ${args.config.stars}-star ${args.config.hotelType} hotel. ` +
-        `Estimated annual operating profit $${Math.round(output.annualOperatingProfit).toLocaleString()} ` +
+        `Estimated annual operating profit $${Math.round(output.annualOperatingProfit).toLocaleString()} CAD ` +
         `(ROI ${(output.roi * 100).toFixed(1)}%, payback ${paybackText}). ` +
         `All figures are simulation estimates, not real financial data.`,
     };

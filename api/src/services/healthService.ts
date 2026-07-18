@@ -1,4 +1,5 @@
 import type { MongoConnection, Readiness } from "../db/mongo.js";
+import type { MLClient } from "../ml/mlClient.js";
 import type { Stay22Client } from "../stay22/client.js";
 
 export interface HealthResponse {
@@ -8,18 +9,21 @@ export interface HealthResponse {
     mongodb: Readiness;
     stay22: Readiness;
     gemini: Readiness;
+    ml: Readiness;
   };
 }
 
-export function buildHealthResponse(
+export async function buildHealthResponse(
   mongo: MongoConnection,
   stay22: Stay22Client,
   geminiReadiness: Readiness,
-): HealthResponse {
+  mlClient: MLClient,
+): Promise<HealthResponse> {
   const dependencies = {
     mongodb: mongo.readiness,
     stay22: stay22.readiness,
     gemini: geminiReadiness,
+    ml: await mlClient.checkHealth(),
   };
   const allReady = Object.values(dependencies).every((d) => d === "ready");
   return {

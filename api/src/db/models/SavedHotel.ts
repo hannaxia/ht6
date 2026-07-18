@@ -10,6 +10,12 @@ export interface SavedHotelDoc {
   _id: Types.ObjectId;
   userId: string;
   name: string;
+  /**
+   * True when this hotel originated from a user-placed map pin (a
+   * from-scratch hotel) rather than being cloned from an existing Stay22
+   * listing. Drives whether the sandbox lets the user rename it.
+   */
+  isCustom: boolean;
   config: Record<string, unknown>;
   metrics: Record<string, unknown> | null;
   coordinates: { type: "Point"; coordinates: [number, number] };
@@ -21,6 +27,7 @@ export const SavedHotelSchema = new Schema<SavedHotelDoc>(
   {
     userId: { type: String, required: true, index: true },
     name: { type: String, required: true },
+    isCustom: { type: Boolean, required: true, default: true },
     config: { type: Schema.Types.Mixed, required: true },
     metrics: { type: Schema.Types.Mixed, default: null },
     coordinates: {

@@ -2,8 +2,11 @@ import type { SimulateHotelOutput } from "../../lib/api/schemas";
 import { log } from "../../lib/log";
 import { MetricCard } from "./MetricCard";
 
-function usd(value: number): string {
-  return `$${Math.round(value).toLocaleString()}`;
+// All simulated dollar figures are CAD — see api/src/simulation/index.ts
+// (ML predictions are converted from the training data's USD; deterministic
+// fallback values are CAD-native config placeholders).
+function cad(value: number): string {
+  return `$${Math.round(value).toLocaleString()} CAD`;
 }
 
 export function MetricsPanel({ metrics }: { metrics: SimulateHotelOutput }) {
@@ -17,18 +20,18 @@ export function MetricsPanel({ metrics }: { metrics: SimulateHotelOutput }) {
       : `${metrics.paybackYears.toFixed(1)} yrs`;
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard label="ADR / night" value={usd(metrics.adr)} />
+      <div className="grid grid-cols-2 gap-3">
+        <MetricCard label="ADR / night" value={cad(metrics.adr)} />
         <MetricCard
           label="Occupancy"
           value={`${metrics.occupancy.toFixed(0)}%`}
         />
-        <MetricCard label="Annual revenue" value={usd(metrics.revenue)} />
+        <MetricCard label="Annual revenue" value={cad(metrics.revenue)} />
         <MetricCard label="Guest rating" value={metrics.rating.toFixed(1)} />
-        <MetricCard label="Investment" value={usd(metrics.investment)} />
+        <MetricCard label="Investment" value={cad(metrics.investment)} />
         <MetricCard
           label="Operating profit / yr"
-          value={usd(metrics.annualOperatingProfit)}
+          value={cad(metrics.annualOperatingProfit)}
         />
         <MetricCard label="ROI" value={`${(metrics.roi * 100).toFixed(1)}%`} />
         <MetricCard label="Payback" value={payback} />

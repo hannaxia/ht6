@@ -9,6 +9,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().optional(),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).optional(),
   FRONTEND_ORIGIN: z.string().min(1).optional(),
+  ML_SERVICE_URL: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

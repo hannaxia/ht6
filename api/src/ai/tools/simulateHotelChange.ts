@@ -25,8 +25,8 @@ export const simulateHotelChangeTool: Tool<
   argsSchema,
   resultSchema,
   async handler(args, ctx) {
-    const before = ctx.engine.simulateHotel(args.base);
-    const after = ctx.engine.simulateHotel({ ...args.base, ...args.changes });
+    const before = await ctx.engine.simulateHotel(args.base);
+    const after = await ctx.engine.simulateHotel({ ...args.base, ...args.changes });
     ctx.logger.info(
       {
         tool: "simulateHotelChange",

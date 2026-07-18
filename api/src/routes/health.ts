@@ -4,9 +4,14 @@ import { buildHealthResponse } from "../services/healthService.js";
 
 export function healthRouter(deps: AppDependencies): Router {
   const router = Router();
-  router.get("/", (_req, res) => {
+  router.get("/", async (_req, res) => {
     res.json(
-      buildHealthResponse(deps.mongo, deps.stay22, deps.ai.readiness),
+      await buildHealthResponse(
+        deps.mongo,
+        deps.stay22,
+        deps.ai.readiness,
+        deps.mlClient,
+      ),
     );
   });
   return router;

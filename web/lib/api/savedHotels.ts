@@ -23,6 +23,7 @@ export const savedHotelsApi = {
     sessionId: string;
     id?: string;
     name: string;
+    isCustom?: boolean;
     config: HotelConfigPayload;
     metrics?: SimulateHotelOutput | null;
   }) {
@@ -34,6 +35,7 @@ export const savedHotelsApi = {
           sessionId: params.sessionId,
           id: params.id,
           name: params.name,
+          isCustom: params.isCustom,
           config: params.config,
           metrics: params.metrics ?? null,
         }),

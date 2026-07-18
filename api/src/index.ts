@@ -9,6 +9,7 @@ import { createApp } from "./app.js";
 import { connectMongo } from "./db/mongo.js";
 import { loadEnv } from "./env.js";
 import { createLogger } from "./logger.js";
+import { createMLClient } from "./ml/mlClient.js";
 import { createSimulationEngine } from "./simulation/index.js";
 import { createStay22Client } from "./stay22/client.js";
 
@@ -26,7 +27,8 @@ async function main(): Promise<void> {
 
   const mongo = await connectMongo(env, logger);
   const stay22 = createStay22Client(env, logger);
-  const simulation = createSimulationEngine(config, logger);
+  const mlClient = createMLClient(env.ML_SERVICE_URL, logger);
+  const simulation = createSimulationEngine(config, logger, mlClient);
   const gemini = createGeminiClient(env, logger);
   const ai = createAIConsultant(gemini, TOOLS, {
     engine: simulation,
@@ -34,7 +36,7 @@ async function main(): Promise<void> {
     stay22,
   });
 
-  const app = createApp({ env, logger, mongo, stay22, simulation, ai });
+  const app = createApp({ env, logger, mongo, stay22, simulation, ai, mlClient });
   const port = env.PORT ?? 4000;
   app.listen(port, () => {
     logger.info({ port }, "innsight api listening");
