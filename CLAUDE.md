@@ -171,6 +171,10 @@ MONGODB_URI=          # MongoDB connection string (Hotels, Locations, Simulation
 
 ## Status
 
-Pre-scaffolding. No code exists yet — this file is the brief for scaffolding the project
-(Next.js frontend, Express backend, MongoDB, Stay22 client, simulation engine, Gemini
-integration) from scratch.
+Scaffolded as a pnpm workspace monorepo: `web/` (Next.js app), `api/` (Express service:
+simulation engine, Stay22 client, Gemini orchestrator, MongoDB models), and
+`packages/config/` (tunable lookup tables). A single root `.env` feeds both apps — no
+per-package env files. The stack boots in degraded mode with an empty `.env`; see
+`README.md` for the external setup checklist (Stay22, Gemini, Mapbox, MongoDB Atlas) and
+remaining manual work (seed Toronto `Locations`, confirm Stay22 wire format, tune config
+tables).

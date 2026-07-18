@@ -1,0 +1,24 @@
+{
+  "name": "@innsight/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "pino": ">=8",
+    "zod": ">=3"
+  },
+  "devDependencies": {
+    "pino": "^9.5.0",
+    "typescript": "^5.6.3",
+    "zod": "^3.23.8"
+  }
+}
