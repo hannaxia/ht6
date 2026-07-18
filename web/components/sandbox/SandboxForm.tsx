@@ -2,6 +2,7 @@
 
 import type { HotelConfigPayload } from "../../lib/api/schemas";
 import { FormField } from "../shared/FormField";
+import { AMENITIES } from "./amenities";
 
 const HOTEL_TYPES = [
   "budget",
@@ -14,23 +15,7 @@ const HOTEL_TYPES = [
 
 const SEGMENTS = ["leisure", "business", "mixed"] as const;
 
-export const AMENITIES = [
-  "pool",
-  "gym",
-  "spa",
-  "restaurant",
-  "bar",
-  "breakfast",
-  "wifi",
-  "parking",
-  "coworking",
-  "ev_charging",
-  "conference_rooms",
-  "rooftop_bar",
-  "airport_shuttle",
-  "smart_rooms",
-  "pet_friendly",
-] as const;
+export { AMENITIES };
 
 export function SandboxForm({
   config,

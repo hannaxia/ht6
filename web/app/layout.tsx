@@ -21,8 +21,8 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
-        <header className="border-b border-slate-200 bg-white">
+      <body className="flex h-screen flex-col bg-slate-50 text-slate-900 antialiased">
+        <header className="shrink-0 border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
             <div className="flex items-center gap-6">
               <a href="/" className="font-bold text-slate-950">
@@ -34,7 +34,9 @@ export default async function RootLayout({
           </div>
         </header>
         <SessionProvider initialSessionId={session?.user.sub}>
-          <AIConsultantProvider>{children}</AIConsultantProvider>
+          <AIConsultantProvider>
+            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          </AIConsultantProvider>
         </SessionProvider>
       </body>
     </html>
