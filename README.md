@@ -125,8 +125,21 @@ hotel data as a substitute.**
   reads per-area scores (tourism/business/transit/density) from the
   `Locations` collection. Cells with no nearby Location doc fall back to
   neutral scores, so the heatmap is flat until real location data is loaded.
-  Write a small seed script (e.g. `api/src/scripts/seedLocations.ts`) with
-  real Toronto neighbourhood data.
+  Run `pnpm --filter @innsight/api seed:locations` (see
+  `api/src/scripts/seedLocations.ts`).
+- **Scrape hotel markers into the `Hotels` collection.** The Market
+  Discovery map reads hotel markers from MongoDB, not from Stay22 directly —
+  calling Stay22 live for every page load doesn't scale (a country-wide
+  bounding box also returns whichever properties rank highest overall
+  rather than spreading results geographically, and Stay22's standard tier
+  caps at 150 req/min). Run `pnpm --filter @innsight/api scrape:hotels` to
+  populate ~20 curated major Canadian cities plus 300+ Ontario towns/cities
+  (`api/src/scripts/scrapeCanadianHotels.ts` — the Ontario town list in
+  `api/src/scripts/ontarioTowns.ts` was generated from GeoNames' free
+  Canada gazetteer). Takes several minutes for the full run — the Stay22
+  client self-throttles to stay under the rate limit and retries on 429s.
+  Re-run periodically to refresh — it's a manual/scheduled job, not called
+  from request handlers.
 - **Confirm the Stay22 wire format** (see the Stay22 section above) and run a
   real search to verify records flow through validation into the map.
 - **Tune the config tables.** Everything in `packages/config/src/` is marked
