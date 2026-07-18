@@ -34,9 +34,9 @@ export function HotelMarkerTooltip({ hotel }: { hotel: Stay22Hotel }) {
         {hotel.name}
       </p>
       {hotel.stars !== undefined ? (
-        <p className="text-slate-600">{hotel.stars}★ hotel class</p>
+        <p className="text-slate-600">{hotel.stars}★ hotel</p>
       ) : hotel.rating !== undefined ? (
-        <p className="text-slate-600">{hotel.rating.toFixed(1)}/5 guest rating</p>
+        <p className="text-slate-600">{hotel.rating.toFixed(1)}/5.0 guest rating</p>
       ) : null}
       {hotel.price ? (
         <p className="text-slate-600">
