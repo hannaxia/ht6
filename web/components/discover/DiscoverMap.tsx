@@ -87,6 +87,7 @@ export function DiscoverMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
+  const [pinned, setPinned] = useState<Hover | null>(null);
 
   // Never touch the Mapbox SDK without a token.
   useEffect(() => {
@@ -197,17 +198,53 @@ export function DiscoverMap({
 
   // Keep the GeoJSON sources in sync when hotels/cells props change.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const gridSource = map.getSource(GRID_SOURCE_ID) as
-      | mapboxgl.GeoJSONSource
-      | undefined;
-    gridSource?.setData(cellsToGeoJson(cells));
-    const hotelsSource = map.getSource(HOTELS_SOURCE_ID) as
-      | mapboxgl.GeoJSONSource
-      | undefined;
-    hotelsSource?.setData(hotelsToGeoJson(hotels));
-    log.debug("map sources updated", {
+    if (!overlayRef.current) return;
+    overlayRef.current.setProps({
+      onClick: (info) => {
+        if (info.layer?.id === "hotels" && info.object) {
+          setPinned({
+            x: info.x,
+            y: info.y,
+            hotel: info.object as Stay22Hotel,
+          });
+        } else {
+          setPinned(null);
+        }
+      },
+      layers: [
+        new GridCellLayer<OpportunityCell>({
+          id: "opportunity-grid",
+          data: cells,
+          cellSize: 900,
+          extruded: false,
+          pickable: true,
+          getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
+          getFillColor: (d) => scoreColor(d.opportunityScore),
+          onHover: (info) =>
+            setHover(
+              info.object
+                ? { x: info.x, y: info.y, cell: info.object }
+                : null,
+            ),
+        }),
+        new ScatterplotLayer<Stay22Hotel>({
+          id: "hotels",
+          data: hotels,
+          pickable: true,
+          radiusMinPixels: 4,
+          radiusMaxPixels: 10,
+          getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
+          getFillColor: [30, 64, 175, 200],
+          onHover: (info) =>
+            setHover(
+              info.object
+                ? { x: info.x, y: info.y, hotel: info.object }
+                : null,
+            ),
+        }),
+      ],
+    });
+    log.debug("deck.gl layers updated", {
       hotels: hotels.length,
       cells: cells.length,
     });
@@ -218,9 +255,17 @@ export function DiscoverMap({
   return (
     <div className="relative h-full min-h-[420px] w-full overflow-hidden rounded border border-slate-200">
       <div ref={containerRef} className="h-full w-full" />
-      {hover ? (
+      {pinned?.hotel ? (
         <div
           className="absolute z-10"
+          style={{ left: pinned.x + 8, top: pinned.y + 8 }}
+        >
+          <HotelMarkerTooltip hotel={pinned.hotel} />
+        </div>
+      ) : null}
+      {hover ? (
+        <div
+          className="absolute z-20"
           style={{ left: hover.x + 8, top: hover.y + 8 }}
         >
           {hover.hotel ? <HotelMarkerTooltip hotel={hover.hotel} /> : null}
