@@ -20,9 +20,11 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_RESULTS = 300;
 // Stay22 only returns availability for the requested stay window; a single
 // window misses hotels that are booked out or not listed for those exact
-// dates. Querying several windows and merging by id surfaces more of the
-// total inventory in an area.
-const STAY_WINDOW_OFFSETS_DAYS = [30, 60, 90, 120];
+// dates. Querying multiple 30-night windows and merging by id surfaces more
+// of the total inventory in an area while still deriving a nightly average
+// from each hotel's own 30-day rate data.
+const STAY_WINDOW_OFFSETS_DAYS = [30, 60];
+const STAY_WINDOW_LENGTH_DAYS = 30;
 
 // Stay22's standard tier caps at 150 req/min on a sliding window (see
 // https://dev.stay22.com/docs/api/rate-limits). A fixed per-item delay in
@@ -93,12 +95,12 @@ export interface Stay22Client {
   ): Promise<Stay22Hotel[]>;
 }
 
-/** A stay window `offsetDays` out; keeps pricing in results. */
+/** A 30-night stay window `offsetDays` out; keeps pricing in results. */
 function stayDates(offsetDays: number): { checkin: string; checkout: string } {
   const checkin = new Date();
   checkin.setDate(checkin.getDate() + offsetDays);
   const checkout = new Date(checkin);
-  checkout.setDate(checkout.getDate() + 1);
+  checkout.setDate(checkout.getDate() + STAY_WINDOW_LENGTH_DAYS);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return { checkin: fmt(checkin), checkout: fmt(checkout) };
 }
