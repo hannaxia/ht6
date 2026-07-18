@@ -45,7 +45,11 @@ export const hotelConfigSchema = z.object({
     z.literal(5),
   ]),
   modernity: z.number().gte(0).lte(1),
-  renovationDelta: z.number().gte(0).lte(1),
+  // Renovation CapEx intent. No longer surfaced as its own sandbox control
+  // (it overlapped conceptually with modernity); defaults to 0 so requests
+  // may omit it, while the engine's investment model still supports it for
+  // the AI consultant / existing-hotel upgrade scenarios.
+  renovationDelta: z.number().gte(0).lte(1).default(0),
   amenities: z.array(z.string()),
   targetSegment: z.enum(["leisure", "business", "mixed"]),
   basePrice: z.number().positive(),

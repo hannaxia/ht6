@@ -1,39 +1,50 @@
 "use client";
 
-import type { Stay22Hotel } from "../../lib/api/schemas";
+import type { SavedHotel, Stay22Hotel } from "../../lib/api/schemas";
 import type { PlacedPin } from "./DiscoverMap";
 import { Stay22Attribution } from "../shared/Stay22Attribution";
 
 /**
  * Right-hand panel over the fullscreen map. Shows details for a selected
- * existing hotel, or a naming form for a user-placed pin. Both surface a
- * "Configure" action that hands off to the Hotel Sandbox.
+ * existing hotel, a selected saved (custom) hotel, or a naming form for a
+ * user-placed pin. Each surfaces an action that hands off to the Hotel
+ * Sandbox.
  */
 export function DiscoverSidebar({
   selectedHotel,
+  selectedSaved,
   placedPin,
   newHotelName,
+  busy = false,
   onNewHotelNameChange,
   onConfigureHotel,
+  onConfigureSaved,
   onConfigurePlaced,
   onClose,
 }: {
   selectedHotel: Stay22Hotel | null;
+  selectedSaved: SavedHotel | null;
   placedPin: PlacedPin | null;
   newHotelName: string;
+  busy?: boolean;
   onNewHotelNameChange: (name: string) => void;
   onConfigureHotel: () => void;
+  onConfigureSaved: () => void;
   onConfigurePlaced: () => void;
   onClose: () => void;
 }) {
-  if (!selectedHotel && !placedPin) return null;
+  if (!selectedHotel && !selectedSaved && !placedPin) return null;
+
+  const title = selectedHotel
+    ? "Hotel details"
+    : selectedSaved
+      ? "Saved hotel"
+      : "New hotel";
 
   return (
     <aside className="absolute right-0 top-0 z-30 flex h-full w-80 flex-col border-l border-slate-200 bg-white shadow-xl">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-800">
-          {selectedHotel ? "Hotel details" : "New hotel"}
-        </h2>
+        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
         <button
           type="button"
           onClick={onClose}
@@ -55,6 +66,8 @@ export function DiscoverSidebar({
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {selectedHotel ? (
           <HotelDetails hotel={selectedHotel} />
+        ) : selectedSaved ? (
+          <SavedDetails saved={selectedSaved} />
         ) : placedPin ? (
           <PlacedForm
             placedPin={placedPin}
@@ -67,21 +80,92 @@ export function DiscoverSidebar({
       <div className="border-t border-slate-200 px-4 py-3">
         <button
           type="button"
-          onClick={selectedHotel ? onConfigureHotel : onConfigurePlaced}
-          disabled={!selectedHotel && newHotelName.trim().length === 0}
+          onClick={
+            selectedHotel
+              ? onConfigureHotel
+              : selectedSaved
+                ? onConfigureSaved
+                : onConfigurePlaced
+          }
+          disabled={
+            busy ||
+            (!selectedHotel &&
+              !selectedSaved &&
+              newHotelName.trim().length === 0)
+          }
           className="w-full rounded bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          Configure →
+          {busy
+            ? "Analyzing location…"
+            : selectedSaved
+              ? "Open in sandbox →"
+              : "Configure →"}
         </button>
         <p className="mt-2 text-[11px] text-slate-500">
           Opens the Hotel Sandbox
           {selectedHotel
-            ? " prefilled to match this hotel."
-            : " with a starting configuration."}{" "}
+            ? " prefilled from this hotel and its surrounding market."
+            : selectedSaved
+              ? " with your saved configuration."
+              : " seeded from this location's nearby market."}{" "}
           All resulting metrics are simulation estimates.
         </p>
       </div>
     </aside>
+  );
+}
+
+function SavedDetails({ saved }: { saved: SavedHotel }) {
+  const { config, metrics } = saved;
+  return (
+    <div className="space-y-3 text-sm">
+      <div>
+        <p className="font-semibold text-slate-900">{saved.name}</p>
+        <p className="text-xs text-red-600">Your saved hotel</p>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-2">
+        <Stat label="Type" value={config.hotelType.replace(/_/g, " ")} />
+        <Stat label="Stars" value={`${config.stars}★`} />
+        <Stat label="Rooms" value={String(config.rooms)} />
+        <Stat label="Base price" value={`$${Math.round(config.basePrice)}`} />
+      </dl>
+
+      {metrics ? (
+        <dl className="grid grid-cols-3 gap-2">
+          {metrics.adr !== undefined ? (
+            <Stat label="ADR" value={`$${Math.round(metrics.adr)}`} />
+          ) : null}
+          {metrics.occupancy !== undefined ? (
+            <Stat
+              label="Occupancy"
+              value={`${Math.round(metrics.occupancy)}%`}
+            />
+          ) : null}
+          {metrics.rating !== undefined ? (
+            <Stat label="Rating" value={`${metrics.rating.toFixed(1)}/5`} />
+          ) : null}
+        </dl>
+      ) : null}
+
+      <div>
+        <p className="mb-1 text-xs font-medium text-slate-600">Amenities</p>
+        {config.amenities.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {config.amenities.map((a) => (
+              <span
+                key={a}
+                className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
+              >
+                {a.replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">None.</p>
+        )}
+      </div>
+    </div>
   );
 }
 

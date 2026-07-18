@@ -5,7 +5,11 @@ import { MapboxOverlay } from "@deck.gl/mapbox";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
-import type { OpportunityCell, Stay22Hotel } from "../../lib/api/schemas";
+import type {
+  OpportunityCell,
+  SavedHotel,
+  Stay22Hotel,
+} from "../../lib/api/schemas";
 import { log } from "../../lib/log";
 import { HeatmapTooltip } from "./HeatmapTooltip";
 import { HotelMarkerTooltip } from "./HotelMarkerTooltip";
@@ -31,6 +35,7 @@ interface Hover {
   y: number;
   hotel?: Stay22Hotel;
   cell?: OpportunityCell;
+  saved?: SavedHotel;
 }
 
 /** Green (high) → red (low) for opportunity scores. */
@@ -42,16 +47,22 @@ function scoreColor(score: number): [number, number, number, number] {
 export function DiscoverMap({
   hotels,
   cells,
+  savedHotels = [],
   selectedHotelId,
+  selectedSavedId,
   placedPin,
   onSelectHotel,
+  onSelectSaved,
   onPlaceHotel,
 }: {
   hotels: Stay22Hotel[];
   cells: OpportunityCell[];
+  savedHotels?: SavedHotel[];
   selectedHotelId?: string | null;
+  selectedSavedId?: string | null;
   placedPin?: PlacedPin | null;
   onSelectHotel?: (hotel: Stay22Hotel) => void;
+  onSelectSaved?: (saved: SavedHotel) => void;
   onPlaceHotel?: (coords: PlacedPin) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,8 +75,10 @@ export function DiscoverMap({
   // re-registering on every render.
   const onSelectHotelRef = useRef(onSelectHotel);
   const onPlaceHotelRef = useRef(onPlaceHotel);
+  const onSelectSavedRef = useRef(onSelectSaved);
   onSelectHotelRef.current = onSelectHotel;
   onPlaceHotelRef.current = onPlaceHotel;
+  onSelectSavedRef.current = onSelectSaved;
 
   // Never touch the Mapbox SDK without a token.
   useEffect(() => {
@@ -108,6 +121,11 @@ export function DiscoverMap({
       getCursor: ({ isDragging, isHovering }) =>
         isDragging ? "grabbing" : isHovering ? "pointer" : "crosshair",
       onClick: (info) => {
+        // Clicking a saved (custom) hotel marker selects it.
+        if (info.layer?.id === "saved-hotels" && info.object) {
+          onSelectSavedRef.current?.(info.object as SavedHotel);
+          return;
+        }
         // Clicking an existing hotel marker selects it.
         if (info.layer?.id === "hotels" && info.object) {
           onSelectHotelRef.current?.(info.object as Stay22Hotel);
@@ -144,10 +162,11 @@ export function DiscoverMap({
           radiusMaxPixels: 12,
           getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
           getRadius: (d) => (d.id === selectedHotelId ? 12 : 6),
+          // Existing Stay22 hotels render as olive green (selected → amber).
           getFillColor: (d) =>
             d.id === selectedHotelId
               ? [217, 119, 6, 255]
-              : [30, 64, 175, 200],
+              : [107, 142, 35, 200],
           updateTriggers: {
             getFillColor: selectedHotelId,
             getRadius: selectedHotelId,
@@ -156,6 +175,31 @@ export function DiscoverMap({
             setHover(
               info.object
                 ? { x: info.x, y: info.y, hotel: info.object }
+                : null,
+            ),
+        }),
+        // Saved (custom) hotels render as red markers, above the base layer.
+        new ScatterplotLayer<SavedHotel>({
+          id: "saved-hotels",
+          data: savedHotels,
+          pickable: true,
+          radiusMinPixels: 6,
+          radiusMaxPixels: 16,
+          stroked: true,
+          lineWidthMinPixels: 2,
+          getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
+          getRadius: (d) => (d.id === selectedSavedId ? 14 : 9),
+          getFillColor: (d) =>
+            d.id === selectedSavedId ? [185, 28, 28, 255] : [220, 38, 38, 230],
+          getLineColor: [255, 255, 255, 255],
+          updateTriggers: {
+            getFillColor: selectedSavedId,
+            getRadius: selectedSavedId,
+          },
+          onHover: (info) =>
+            setHover(
+              info.object
+                ? { x: info.x, y: info.y, saved: info.object }
                 : null,
             ),
         }),
@@ -177,9 +221,10 @@ export function DiscoverMap({
     log.debug("deck.gl layers updated", {
       hotels: hotels.length,
       cells: cells.length,
+      saved: savedHotels.length,
       placed: placedLayerData.length,
     });
-  }, [hotels, cells, selectedHotelId, placedPin]);
+  }, [hotels, cells, savedHotels, selectedHotelId, selectedSavedId, placedPin]);
 
   if (!MAPBOX_TOKEN) return <MapNotConfigured />;
 
@@ -193,6 +238,18 @@ export function DiscoverMap({
         >
           {hover.hotel ? <HotelMarkerTooltip hotel={hover.hotel} /> : null}
           {hover.cell ? <HeatmapTooltip cell={hover.cell} /> : null}
+          {hover.saved ? (
+            <div className="pointer-events-none w-40 rounded border border-slate-200 bg-white p-2 text-xs shadow">
+              <p className="font-medium text-slate-800">{hover.saved.name}</p>
+              <p className="text-slate-600">
+                {hover.saved.config.stars}★{" "}
+                {hover.saved.config.hotelType.replace(/_/g, " ")}
+              </p>
+              <p className="text-[10px] uppercase tracking-wide text-red-600">
+                Saved hotel
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

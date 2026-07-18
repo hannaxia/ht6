@@ -8,6 +8,10 @@ import {
   type OpportunityGridCacheModel,
 } from "./models/OpportunityGridCache.js";
 import {
+  SavedHotelSchema,
+  type SavedHotelModel,
+} from "./models/SavedHotel.js";
+import {
   SimulationSchema,
   type SimulationModel,
 } from "./models/Simulation.js";
@@ -19,6 +23,7 @@ export interface MongoModels {
   Location: LocationModel;
   Simulation: SimulationModel;
   OpportunityGridCache: OpportunityGridCacheModel;
+  SavedHotel: SavedHotelModel;
 }
 
 export interface MongoConnection {
@@ -36,6 +41,7 @@ function buildModels(): MongoModels {
       "OpportunityGridCache",
       OpportunityGridCacheSchema,
     ),
+    SavedHotel: mongoose.model("SavedHotel", SavedHotelSchema),
   };
 }
 
@@ -62,6 +68,7 @@ function buildDetachedModels(): MongoModels {
     Location: detached as LocationModel,
     Simulation: detached as SimulationModel,
     OpportunityGridCache: detached as OpportunityGridCacheModel,
+    SavedHotel: detached as SavedHotelModel,
   };
 }
 

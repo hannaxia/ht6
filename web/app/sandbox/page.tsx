@@ -13,6 +13,7 @@ import type {
   HotelConfigPayload,
   SimulateHotelOutput,
 } from "../../lib/api/schemas";
+import { savedHotelsApi } from "../../lib/api/savedHotels";
 import { simulationsApi } from "../../lib/api/simulations";
 import {
   consumeSandboxHandoff,
@@ -21,11 +22,18 @@ import {
 import { createInFlightDebouncer } from "../../lib/debounce";
 import { log } from "../../lib/log";
 
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 export default function SandboxPage() {
   const { open, lastDeltas } = useAIConsultant();
-  const { sessionId } = useSession();
+  const { sessionId, isAuthenticated } = useSession();
   const [config, setConfig] = useState<HotelConfigPayload>(DEFAULT_CONFIG);
   const [hotelLabel, setHotelLabel] = useState<string | null>(null);
+  // Save-to-profile state.
+  const [savedHotelId, setSavedHotelId] = useState<string | null>(null);
+  const [saveName, setSaveName] = useState("");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveErrorCode, setSaveErrorCode] = useState<string | null>(null);
   // Gates the first simulation until we've checked for a Market Discovery
   // handoff, so we never fire a throwaway simulation for the default config
   // (which the in-flight debouncer could let win over the real handoff).
@@ -74,10 +82,43 @@ export default function SandboxPage() {
     if (handoff) {
       setConfig(handoff.config);
       setHotelLabel(handoff.label);
+      setSaveName(handoff.label);
+      if (handoff.savedHotelId) setSavedHotelId(handoff.savedHotelId);
       log.info("sandbox config from discovery handoff", handoff.origin);
     }
     setHandoffResolved(true);
   }, []);
+
+  // Editing the config after a save means the persisted copy is now stale.
+  function markUnsaved() {
+    setSaveStatus((s) => (s === "saved" ? "idle" : s));
+  }
+
+  async function handleSave() {
+    if (!isAuthenticated || saveStatus === "saving") return;
+    const name = saveName.trim();
+    if (!name) return;
+    setSaveStatus("saving");
+    setSaveErrorCode(null);
+    try {
+      const { savedHotel } = await savedHotelsApi.save({
+        sessionId,
+        id: savedHotelId ?? undefined,
+        name,
+        config,
+        metrics,
+      });
+      setSavedHotelId(savedHotel.id);
+      setHotelLabel(savedHotel.name);
+      setSaveStatus("saved");
+      log.info("hotel saved", savedHotel.id);
+    } catch (err) {
+      const code = err instanceof ApiError ? err.errorCode : "internal_error";
+      setSaveErrorCode(code);
+      setSaveStatus("error");
+      log.warn("save failed", code);
+    }
+  }
 
   // Simulate whenever the config changes, once the session has hydrated and
   // the handoff has been resolved. config is the single source of truth; the
@@ -90,6 +131,7 @@ export default function SandboxPage() {
 
   function handleChange(next: HotelConfigPayload) {
     setConfig(next);
+    markUnsaved();
   }
 
   return (
@@ -107,14 +149,65 @@ export default function SandboxPage() {
             values are simulation estimates.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={open}
-          className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100"
-        >
-          AI Consultant
-        </button>
+        <div className="flex items-center gap-2">
+          {isAuthenticated ? (
+            <>
+              <input
+                type="text"
+                value={saveName}
+                placeholder="Name this hotel"
+                onChange={(e) => {
+                  setSaveName(e.target.value);
+                  markUnsaved();
+                }}
+                className="w-44 rounded border border-slate-300 px-2 py-2 text-sm focus:border-slate-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saveStatus === "saving" || saveName.trim().length === 0}
+                className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {saveStatus === "saving"
+                  ? "Saving…"
+                  : saveStatus === "saved"
+                    ? "Saved ✓"
+                    : savedHotelId
+                      ? "Update"
+                      : "Save"}
+              </button>
+            </>
+          ) : (
+            <a
+              href="/auth/login?returnTo=/sandbox"
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100"
+              title="Log in to save this hotel to your profile"
+            >
+              Log in to save
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={open}
+            className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100"
+          >
+            AI Consultant
+          </button>
+        </div>
       </div>
+
+      {saveStatus === "error" ? (
+        <ErrorBanner
+          errorCode={saveErrorCode ?? "internal_error"}
+          message={
+            saveErrorCode === "database_unavailable"
+              ? "MongoDB is not configured — saving needs it (README → Setup checklist → MongoDB Atlas)."
+              : saveErrorCode === "network_error"
+                ? "Could not reach the Innsight API — is it running on port 4000?"
+                : "Could not save this hotel. Please try again."
+          }
+        />
+      ) : null}
 
       {errorCode ? (
         <ErrorBanner
