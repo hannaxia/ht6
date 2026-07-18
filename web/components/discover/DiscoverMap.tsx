@@ -42,6 +42,7 @@ export function DiscoverMap({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
+  const [pinned, setPinned] = useState<Hover | null>(null);
 
   // Never touch the Mapbox SDK without a token.
   useEffect(() => {
@@ -68,6 +69,17 @@ export function DiscoverMap({
   useEffect(() => {
     if (!overlayRef.current) return;
     overlayRef.current.setProps({
+      onClick: (info) => {
+        if (info.layer?.id === "hotels" && info.object) {
+          setPinned({
+            x: info.x,
+            y: info.y,
+            hotel: info.object as Stay22Hotel,
+          });
+        } else {
+          setPinned(null);
+        }
+      },
       layers: [
         new GridCellLayer<OpportunityCell>({
           id: "opportunity-grid",
@@ -112,9 +124,17 @@ export function DiscoverMap({
   return (
     <div className="relative h-full min-h-[420px] w-full overflow-hidden rounded border border-slate-200">
       <div ref={containerRef} className="h-full w-full" />
-      {hover ? (
+      {pinned?.hotel ? (
         <div
           className="absolute z-10"
+          style={{ left: pinned.x + 8, top: pinned.y + 8 }}
+        >
+          <HotelMarkerTooltip hotel={pinned.hotel} />
+        </div>
+      ) : null}
+      {hover ? (
+        <div
+          className="absolute z-20"
           style={{ left: hover.x + 8, top: hover.y + 8 }}
         >
           {hover.hotel ? <HotelMarkerTooltip hotel={hover.hotel} /> : null}
