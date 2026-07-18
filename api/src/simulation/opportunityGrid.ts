@@ -2,6 +2,7 @@ import type { LoadedConfig } from "@innsight/config";
 import type { Logger } from "pino";
 import { adrFormula } from "./adr.js";
 import * as competition from "./competition.js";
+import { isInLakeOntario } from "./lakeOntarioBoundary.js";
 import { locationMultiplier } from "./locationScore.js";
 import { qualityMultiplier } from "./qualityScore.js";
 import type {
@@ -13,6 +14,8 @@ const EPSILON = 1e-9;
 
 interface RawCell {
   coordinates: { lat: number; lng: number };
+  cellHalfDegLat: number;
+  cellHalfDegLng: number;
   components: OpportunityCell["components"];
 }
 
@@ -34,51 +37,86 @@ export function computeOpportunityGrid(
   logger: Logger,
 ): OpportunityCell[] {
   const log = logger.child({ component: "opportunity-grid", city: input.city });
-  const { north, south, east, west } = input.cityBbox;
-  const n = Math.max(1, Math.floor(input.gridSize));
+
+  // Cell centers: either an explicit list (nationwide grid, anchored to
+  // where hotels actually exist, with per-cell sizing) or the default even
+  // NxN grid over cityBbox (single-city grids, e.g. Toronto).
+  let cellCenters: {
+    lat: number;
+    lng: number;
+    cellHalfDegLat: number;
+    cellHalfDegLng: number;
+  }[];
+  if (input.cellCoordinates) {
+    cellCenters = input.cellCoordinates;
+  } else {
+    const { north, south, east, west } = input.cityBbox;
+    const n = Math.max(1, Math.floor(input.gridSize));
+    const cellHalfDegLat = (north - south) / n / 2;
+    const cellHalfDegLng = (east - west) / n / 2;
+    cellCenters = [];
+    for (let row = 0; row < n; row++) {
+      for (let col = 0; col < n; col++) {
+        cellCenters.push({
+          lat: south + ((row + 0.5) / n) * (north - south),
+          lng: west + ((col + 0.5) / n) * (east - west),
+          cellHalfDegLat,
+          cellHalfDegLng,
+        });
+      }
+    }
+  }
 
   // Pass 1: raw components per cell (hypothetical 4-star, 100-room midscale hotel)
+  // Cells centered on open water are skipped entirely — a hotel can't be
+  // built on a lake, so there's no meaningful opportunity score for that
+  // point. Only Lake Ontario is checked today since it's the only body of
+  // water this app currently has fine-grained coverage near (Toronto);
+  // extend with more lake polygons as needed for other waterfront areas.
+  let skippedWaterCells = 0;
   const rawCells: RawCell[] = [];
-  for (let row = 0; row < n; row++) {
-    for (let col = 0; col < n; col++) {
-      const lat = south + ((row + 0.5) / n) * (north - south);
-      const lng = west + ((col + 0.5) / n) * (east - west);
-      const ctx = input.cellContextResolver({ lat, lng });
-
-      const locMult = locationMultiplier(ctx.location.scores);
-      const qualMult = qualityMultiplier(4, 0.7);
-      const adr = adrFormula(ctx.basePrice, locMult, qualMult, 0);
-      const baselineOccupancy = Math.max(
-        0,
-        Math.min(100, ctx.location.baseDemand + ctx.location.locationDemand),
-      );
-      const revenuePotential = adr * (baselineOccupancy / 100) * 365; // per-room USD
-      const demand = ctx.location.baseDemand + ctx.location.locationDemand;
-      const segmentWeightedCompetition = competition.pressure(
-        {
-          stars: 4,
-          hotelType: "midscale",
-          segmentAdrNorm: ctx.segmentAdrNorm,
-          location: ctx.location,
-        },
-        input.competitors,
-        config.competitionWeighting,
-      );
-      const risk =
-        config.riskWeights.volatility * ctx.volatility +
-        config.riskWeights.relConstructionCost * ctx.relConstructionCost +
-        config.riskWeights.demandConcentration * ctx.demandConcentration;
-
-      rawCells.push({
-        coordinates: { lat, lng },
-        components: {
-          revenuePotential,
-          demand,
-          segmentWeightedCompetition,
-          risk,
-        },
-      });
+  for (const { lat, lng, cellHalfDegLat, cellHalfDegLng } of cellCenters) {
+    if (isInLakeOntario(lng, lat)) {
+      skippedWaterCells += 1;
+      continue;
     }
+    const ctx = input.cellContextResolver({ lat, lng });
+
+    const locMult = locationMultiplier(ctx.location.scores);
+    const qualMult = qualityMultiplier(4, 0.7);
+    const adr = adrFormula(ctx.basePrice, locMult, qualMult, 0);
+    const baselineOccupancy = Math.max(
+      0,
+      Math.min(100, ctx.location.baseDemand + ctx.location.locationDemand),
+    );
+    const revenuePotential = adr * (baselineOccupancy / 100) * 365; // per-room USD
+    const demand = ctx.location.baseDemand + ctx.location.locationDemand;
+    const segmentWeightedCompetition = competition.pressure(
+      {
+        stars: 4,
+        hotelType: "midscale",
+        segmentAdrNorm: ctx.segmentAdrNorm,
+        location: ctx.location,
+      },
+      input.competitors,
+      config.competitionWeighting,
+    );
+    const risk =
+      config.riskWeights.volatility * ctx.volatility +
+      config.riskWeights.relConstructionCost * ctx.relConstructionCost +
+      config.riskWeights.demandConcentration * ctx.demandConcentration;
+
+    rawCells.push({
+      coordinates: { lat, lng },
+      cellHalfDegLat,
+      cellHalfDegLng,
+      components: {
+        revenuePotential,
+        demand,
+        segmentWeightedCompetition,
+        risk,
+      },
+    });
   }
 
   if (rawCells.length === 0) {
@@ -146,7 +184,7 @@ export function computeOpportunityGrid(
     };
   });
   log.info(
-    { cells: cells.length, gridSize: n },
+    { cells: cells.length, candidateCells: cellCenters.length, skippedWaterCells },
     "opportunity grid computed",
   );
   return cells;

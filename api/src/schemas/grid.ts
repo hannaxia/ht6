@@ -10,6 +10,12 @@ const normalizedScore = z.number().gte(0).lte(100);
 
 export const opportunityCellSchema = z.object({
   coordinates: coordinateSchema,
+  // Half-width/height of this cell in degrees, so the frontend can render
+  // exact edge-to-edge squares (no gaps, no overlap) instead of guessing a
+  // fixed radius — cells can vary in size across places with different
+  // grid densities.
+  cellHalfDegLat: z.number().positive(),
+  cellHalfDegLng: z.number().positive(),
   components: z.object({
     revenuePotential: z.number().finite(),
     demand: z.number().finite(),
@@ -28,4 +34,6 @@ export const opportunityCellSchema = z.object({
 export const opportunityGridResponseSchema = z.object({
   cells: z.array(opportunityCellSchema),
   disclaimer: z.string(),
+  /** True when this response was served from the grid cache collection. */
+  cached: z.boolean().optional(),
 });

@@ -11,7 +11,10 @@ import { locationsApi } from "../../lib/api/locations";
 import type { OpportunityCell, Stay22Hotel } from "../../lib/api/schemas";
 import { log } from "../../lib/log";
 
-const CITY = "toronto";
+// Special value requesting the opportunity grid over every place with
+// scraped hotel inventory (see api/src/routes/locations.ts), instead of a
+// single hardcoded city.
+const GRID_SCOPE = "nationwide";
 
 // Covers all of Canada (west,south,east,north). Hotel markers are now read
 // from MongoDB (populated by `pnpm --filter @innsight/api scrape:hotels`)
@@ -47,7 +50,7 @@ export default function DiscoverPage() {
       });
 
     locationsApi
-      .opportunityGrid({ city: CITY })
+      .opportunityGrid({ city: GRID_SCOPE })
       .then((res) => {
         if (cancelled) return;
         setCells(res.cells);
@@ -73,9 +76,10 @@ export default function DiscoverPage() {
           <h1 className="text-xl font-bold">Market Discovery — Canada</h1>
           <p className="text-sm text-slate-600">
             Hotel markers are Stay22 inventory across Canada (periodically
-            refreshed); the opportunity heatmap (Toronto only) shows
-            estimated opportunity scores (simulation, not real financial
-            data).
+            refreshed); the opportunity heatmap covers every place with
+            hotel inventory and shows estimated opportunity scores
+            (simulation, not real financial data — Toronto uses real local
+            input data, other areas use generic baseline assumptions).
           </p>
         </div>
         <button
@@ -118,7 +122,7 @@ export default function DiscoverPage() {
       <div className="h-[560px]">
         <DiscoverMap hotels={hotels} cells={cells} />
       </div>
-      <ConsultantPanel context={{ view: "discover", city: CITY }} />
+      <ConsultantPanel context={{ view: "discover", city: "toronto" }} />
     </main>
   );
 }

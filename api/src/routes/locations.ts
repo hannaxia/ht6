@@ -4,8 +4,13 @@ import { opportunityGridQuerySchema } from "../schemas/grid.js";
 import { DISCLAIMER } from "../simulation/index.js";
 import {
   computeCityOpportunityGrid,
+  computeNationwideOpportunityGrid,
   UnknownCityError,
 } from "../services/locationService.js";
+
+// Special `city` value requesting the grid over every place with scraped
+// hotel inventory, instead of a single hardcoded city.
+const NATIONWIDE_CITY_VALUE = "nationwide";
 
 export function locationsRouter(deps: AppDependencies): Router {
   const router = Router();
@@ -27,6 +32,17 @@ export function locationsRouter(deps: AppDependencies): Router {
       return;
     }
     try {
+      if (parsed.data.city.toLowerCase() === NATIONWIDE_CITY_VALUE) {
+        const forceRecompute = req.query.refresh === "true";
+        const { cells, cached } = await computeNationwideOpportunityGrid(
+          deps.simulation,
+          deps.mongo,
+          req.log,
+          forceRecompute,
+        );
+        res.json({ cells, disclaimer: DISCLAIMER, cached });
+        return;
+      }
       const cells = await computeCityOpportunityGrid(
         parsed.data.city,
         parsed.data.gridSize,
