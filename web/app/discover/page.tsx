@@ -13,6 +13,12 @@ import { log } from "../../lib/log";
 
 const CITY = "toronto";
 
+// Same Toronto bounding box as api/src/services/locationService.ts
+// (west,south,east,north). Searching by bbox instead of city name spreads
+// Stay22 results across the whole city instead of clustering around one
+// geocoded point.
+const CITY_BBOX = "-79.64,43.58,-79.12,43.85";
+
 export default function DiscoverPage() {
   const { open } = useAIConsultant();
   const [hotels, setHotels] = useState<Stay22Hotel[]>([]);
@@ -22,7 +28,7 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     hotelsApi
-      .list({ city: CITY })
+      .list({ bbox: CITY_BBOX })
       .then((res) => {
         setHotels(res.hotels);
         log.info("hotels loaded", res.hotels.length);
