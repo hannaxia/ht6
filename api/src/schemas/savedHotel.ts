@@ -12,6 +12,12 @@ export const savedHotelUpsertSchema = z.object({
   sessionId: z.string().min(1),
   id: z.string().min(1).optional(),
   name: z.string().min(1).max(120),
+  /**
+   * True for a from-scratch hotel (placed pin); false for one cloned from an
+   * existing Stay22 listing. Only settable on create — an update omitting it
+   * keeps the existing record's value (see savedHotelService.upsertSavedHotel).
+   */
+  isCustom: z.boolean().optional(),
   config: hotelConfigSchema,
   metrics: z.record(z.unknown()).nullable().optional(),
 });
@@ -19,6 +25,7 @@ export const savedHotelUpsertSchema = z.object({
 export const savedHotelSchema = z.object({
   id: z.string(),
   name: z.string(),
+  isCustom: z.boolean(),
   config: hotelConfigSchema,
   metrics: z.record(z.unknown()).nullable(),
   coordinates: coordinateSchema,

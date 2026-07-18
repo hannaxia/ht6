@@ -44,6 +44,7 @@ export default function ProfilePage() {
       origin: "saved",
       config: hotel.config,
       savedHotelId: hotel.id,
+      isCustom: hotel.isCustom,
     });
     router.push("/sandbox");
   }

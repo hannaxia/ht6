@@ -191,6 +191,7 @@ export type HotelConfigPayload = z.infer<typeof hotelConfigPayloadSchema>;
 export const savedHotelSchema = z.object({
   id: z.string(),
   name: z.string(),
+  isCustom: z.boolean(),
   config: hotelConfigPayloadSchema,
   metrics: simulateHotelOutputSchema.partial().nullable(),
   coordinates: coordinateSchema,

@@ -162,11 +162,11 @@ export function DiscoverMap({
           radiusMaxPixels: 12,
           getPosition: (d) => [d.coordinates.lng, d.coordinates.lat],
           getRadius: (d) => (d.id === selectedHotelId ? 12 : 6),
-          // Existing Stay22 hotels render as olive green (selected → amber).
+          // Existing Stay22 hotels render as blue (selected → amber).
           getFillColor: (d) =>
             d.id === selectedHotelId
               ? [217, 119, 6, 255]
-              : [107, 142, 35, 200],
+              : [30, 64, 175, 200],
           updateTriggers: {
             getFillColor: selectedHotelId,
             getRadius: selectedHotelId,

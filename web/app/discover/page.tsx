@@ -199,6 +199,7 @@ export default function DiscoverPage() {
       label: selectedHotel.name,
       origin: "existing",
       config,
+      isCustom: false,
     });
     router.push("/sandbox");
   }
@@ -213,7 +214,7 @@ export default function DiscoverPage() {
       placedPin,
       {},
     );
-    storeSandboxHandoff({ label: name, origin: "new", config });
+    storeSandboxHandoff({ label: name, origin: "new", config, isCustom: true });
     router.push("/sandbox");
   }
 
@@ -224,6 +225,7 @@ export default function DiscoverPage() {
       origin: "saved",
       config: selectedSaved.config,
       savedHotelId: selectedSaved.id,
+      isCustom: selectedSaved.isCustom,
     });
     router.push("/sandbox");
   }

@@ -26,6 +26,12 @@ export interface SandboxHandoff {
   config: HotelConfigPayload;
   /** Set when reopening a saved hotel, so Save updates it instead of forking. */
   savedHotelId?: string;
+  /**
+   * True for a from-scratch hotel (placed pin, or a saved hotel that was
+   * originally one). Drives whether the sandbox lets the user rename it —
+   * hotels cloned from a real Stay22 listing keep that listing's name.
+   */
+  isCustom: boolean;
 }
 
 /** Baseline config used for a freshly placed hotel and as a mapping fallback. */

@@ -12,6 +12,7 @@ function toResponse(doc: SavedHotelDoc): SavedHotelResponse {
   return {
     id: String(doc._id),
     name: doc.name,
+    isCustom: doc.isCustom,
     // Persisted config was validated by hotelConfigSchema on write; the DB
     // stores it as a loose document, so restore the response's typed shape.
     config: doc.config as SavedHotelResponse["config"],
@@ -49,16 +50,18 @@ export async function upsertSavedHotel(
 
   if (input.id) {
     if (!mongoose.Types.ObjectId.isValid(input.id)) return null;
+    // isCustom is immutable after creation unless explicitly passed — an
+    // update call only touches it if the caller sends a value.
+    const set: Record<string, unknown> = {
+      name: input.name,
+      config: input.config,
+      metrics: input.metrics ?? null,
+      coordinates,
+    };
+    if (input.isCustom !== undefined) set.isCustom = input.isCustom;
     const updated = await mongo.models.SavedHotel.findOneAndUpdate(
       { _id: input.id, userId: input.sessionId },
-      {
-        $set: {
-          name: input.name,
-          config: input.config,
-          metrics: input.metrics ?? null,
-          coordinates,
-        },
-      },
+      { $set: set },
       { new: true },
     )
       .lean<SavedHotelDoc>()
@@ -74,6 +77,7 @@ export async function upsertSavedHotel(
   const created = await mongo.models.SavedHotel.create({
     userId: input.sessionId,
     name: input.name,
+    isCustom: input.isCustom ?? true,
     config: input.config,
     metrics: input.metrics ?? null,
     coordinates,
