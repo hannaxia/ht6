@@ -13,11 +13,17 @@ const SessionContext = createContext<{ sessionId: string }>({
   sessionId: "ssr",
 });
 
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const [sessionId, setSessionId] = useState("ssr");
+export function SessionProvider({
+  children,
+  initialSessionId,
+}: {
+  children: ReactNode;
+  initialSessionId?: string;
+}) {
+  const [sessionId, setSessionId] = useState(initialSessionId ?? "ssr");
   useEffect(() => {
-    setSessionId(getSessionId());
-  }, []);
+    if (!initialSessionId) setSessionId(getSessionId());
+  }, [initialSessionId]);
   return (
     <SessionContext.Provider value={{ sessionId }}>
       {children}

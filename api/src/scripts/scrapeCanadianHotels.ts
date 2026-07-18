@@ -5,10 +5,12 @@
  * `/hotels` route reads from MongoDB, not Stay22 directly, so this script
  * is the only thing that talks to Stay22 for hotel data.
  *
- * Rate-limit safety: Stay22's standard tier caps at 150 req/min (sliding
- * window). Each city here uses maxWindows=1, maxPagesPerWindow=2 (≤2
- * requests/city), plus a delay between cities, keeping this comfortably
- * under the limit even for the full list.
+ * Rate-limit safety: each city uses maxWindows=1, maxPagesPerWindow=2 (≤2
+ * requests/city). The Stay22 client itself enforces a hard cap on actual
+ * requests sent per 60s window (shared across the whole process) and
+ * retries with backoff on 429s, so this script doesn't need to guess a
+ * safe per-city delay — a small delay is still kept as a courtesy/spacing
+ * measure.
  *
  * Run with:
  *   pnpm --filter @innsight/api scrape:hotels
@@ -22,6 +24,7 @@ import { pino } from "pino";
 import { HotelSchema } from "../db/models/Hotel.js";
 import { loadEnv } from "../env.js";
 import { createStay22Client, type BoundingBox } from "../stay22/client.js";
+import { ONTARIO_TOWNS } from "./ontarioTowns.js";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -61,6 +64,9 @@ const CANADIAN_CITIES: Record<string, BoundingBox> = {
   regina: { west: -104.7, south: 50.4, east: -104.5, north: 50.5 },
   whitehorse: { west: -135.2, south: 60.65, east: -135.0, north: 60.75 },
   yellowknife: { west: -114.5, south: 62.4, east: -114.3, north: 62.5 },
+  // 300+ additional Ontario towns/cities from GeoNames — see
+  // ontarioTowns.ts for how this list was generated.
+  ...ONTARIO_TOWNS,
 };
 
 const DELAY_BETWEEN_CITIES_MS = 700;
