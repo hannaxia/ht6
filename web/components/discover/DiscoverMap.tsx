@@ -12,7 +12,11 @@ import { HotelMarkerTooltip } from "./HotelMarkerTooltip";
 import { MapNotConfigured } from "./MapNotConfigured";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
-const TORONTO_CENTER: [number, number] = [-79.3832, 43.6532];
+// Centered so all of Ontario is visible at initial load, zoomed out enough
+// to see hotel markers province-wide; the opportunity heatmap itself stays
+// Toronto-scoped and will appear as a small cluster of cells near Toronto.
+const ONTARIO_CENTER: [number, number] = [-84.5, 49.5];
+const ONTARIO_ZOOM = 4.4;
 
 interface Hover {
   x: number;
@@ -46,8 +50,8 @@ export function DiscoverMap({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/light-v11",
-      center: TORONTO_CENTER,
-      zoom: 11,
+      center: ONTARIO_CENTER,
+      zoom: ONTARIO_ZOOM,
     });
     const overlay = new MapboxOverlay({ layers: [] });
     map.addControl(overlay);
