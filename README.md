@@ -67,7 +67,7 @@ npm run build           # Build all workspaces
 
 ## Setup checklist (work to be done outside this repo)
 
-These four steps happen on external platforms and cannot be automated from
+These five steps happen on external platforms and cannot be automated from
 this codebase. After each one, paste the value into the root `.env` and
 restart the dev processes.
 
@@ -119,6 +119,21 @@ hotel data as a substitute.**
    password, append the db name (e.g. `...mongodb.net/innsight`), and paste
    into `MONGODB_URI` in `.env`.
 
+### Auth0
+
+1. In the Auth0 Dashboard, create a **Regular Web Application**.
+2. Set **Allowed Callback URLs** to `http://localhost:3000/auth/callback` and
+   **Allowed Logout URLs** to `http://localhost:3000`.
+3. Copy the domain, client ID, and client secret into the matching `AUTH0_*`
+   values in the root `.env`.
+4. Run `openssl rand -hex 32` and copy the result into `AUTH0_SECRET`.
+5. Keep `APP_BASE_URL=http://localhost:3000` for local development, then add
+   the corresponding callback/logout URLs when deploying to another domain.
+
+When these values are empty, the app remains usable in degraded mode and the
+header displays “Login not configured.” Once configured, Auth0 serves login,
+logout, and callback handling under `/auth/*`.
+
 ### Remaining work after keys are in
 
 - **Seed the `Locations` collection for Toronto.** The opportunity heatmap
@@ -154,6 +169,11 @@ hotel data as a substitute.**
 | `GEMINI_API_KEY` | api | AI consultant (Gemini) |
 | `GEMINI_MODEL` | api | Optional; defaults to `gemini-flash-latest` |
 | `MONGODB_URI` | api | MongoDB Atlas connection string |
+| `AUTH0_DOMAIN` | web | Auth0 tenant domain |
+| `AUTH0_CLIENT_ID` | web | Auth0 Regular Web Application client ID |
+| `AUTH0_CLIENT_SECRET` | web | Auth0 application client secret (server-only) |
+| `AUTH0_SECRET` | web | 64-character hex secret used to encrypt session cookies |
+| `APP_BASE_URL` | web | Public web origin used for Auth0 callbacks |
 | `PORT` | api | API port (default 4000) |
 | `LOG_LEVEL` | api | pino level (default `info`) |
 | `FRONTEND_ORIGIN` | api | CORS allowlist (default `http://localhost:3000`) |
