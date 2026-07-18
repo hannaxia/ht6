@@ -9,6 +9,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.25.0",
     "@deck.gl/core": "^9.0.35",
     "@deck.gl/layers": "^9.0.35",
     "@deck.gl/mapbox": "^9.0.35",
