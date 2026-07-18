@@ -13,4 +13,7 @@ CLAUDE.md
 .venv/
 pnpm-lock.yaml
 pnpm-workspace.yaml
+ml/datasets/
+ml/models/*.pkl
+ml/models/*.csv
 .vscode/

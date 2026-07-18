@@ -24,9 +24,52 @@ const MAX_RESULTS = 300;
 // total inventory in an area.
 const STAY_WINDOW_OFFSETS_DAYS = [30, 60, 90, 120];
 
+// Stay22's standard tier caps at 150 req/min on a sliding window (see
+// https://dev.stay22.com/docs/api/rate-limits). A fixed per-item delay in
+// caller loops (e.g. the scrape script) isn't reliable — pages-per-item
+// varies, so the real request rate can still exceed the limit and start
+// returning 429s. This module-level limiter enforces a hard cap on actual
+// requests sent, shared across every call made through this client within
+// the process, regardless of caller. Kept below 150 for headroom.
+const MAX_REQUESTS_PER_WINDOW = 120;
+const RATE_WINDOW_MS = 60_000;
+const requestTimestamps: number[] = [];
+
+async function waitForRateLimitSlot(): Promise<void> {
+  for (;;) {
+    const now = Date.now();
+    while (
+      requestTimestamps.length > 0 &&
+      now - requestTimestamps[0]! >= RATE_WINDOW_MS
+    ) {
+      requestTimestamps.shift();
+    }
+    if (requestTimestamps.length < MAX_REQUESTS_PER_WINDOW) {
+      requestTimestamps.push(now);
+      return;
+    }
+    const waitMs = RATE_WINDOW_MS - (now - requestTimestamps[0]!) + 50;
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+}
+
+const RETRY_DELAYS_MS = [1_000, 3_000, 8_000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export interface Stay22SearchOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * Caps how many of STAY_WINDOW_OFFSETS_DAYS are queried (default: all).
+   * Bulk/scrape callers pass a low value to keep per-call request volume
+   * small — live/interactive callers should leave this unset.
+   */
+  maxWindows?: number;
+  /** Caps pages fetched per stay window (default: unlimited, up to MAX_RESULTS). */
+  maxPagesPerWindow?: number;
 }
 
 export interface BoundingBox {
@@ -88,35 +131,49 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
     url.searchParams.set("page", String(page));
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-    const controller = new AbortController();
-    const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    opts?.signal?.addEventListener("abort", () => controller.abort());
-
     let raw: unknown;
-    try {
-      const res = await fetch(url, {
-        // Confirmed 2026-07-18 against https://dev.stay22.com/docs/api/authentication.
-        headers: { "X-API-KEY": apiKey!, Accept: "application/json" },
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        log.warn(
-          { url: url.toString(), status: res.status },
-          "Stay22 returned non-2xx; returning []",
-        );
+    for (let attempt = 0; ; attempt++) {
+      await waitForRateLimitSlot();
+
+      const controller = new AbortController();
+      const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      opts?.signal?.addEventListener("abort", () => controller.abort());
+
+      try {
+        const res = await fetch(url, {
+          // Confirmed 2026-07-18 against https://dev.stay22.com/docs/api/authentication.
+          headers: { "X-API-KEY": apiKey!, Accept: "application/json" },
+          signal: controller.signal,
+        });
+        if (res.status === 429 && attempt < RETRY_DELAYS_MS.length) {
+          const delay = RETRY_DELAYS_MS[attempt]!;
+          log.warn(
+            { url: url.toString(), attempt, delay },
+            "Stay22 rate-limited (429); retrying with backoff",
+          );
+          await sleep(delay);
+          continue;
+        }
+        if (!res.ok) {
+          log.warn(
+            { url: url.toString(), status: res.status },
+            "Stay22 returned non-2xx; returning []",
+          );
+          return null;
+        }
+        raw = await res.json();
+        break;
+      } catch (err) {
+        if (controller.signal.aborted) {
+          log.warn({ timeoutMs }, "Stay22 request timed out; returning []");
+        } else {
+          log.warn({ err }, "Stay22 request failed; returning []");
+        }
         return null;
+      } finally {
+        clearTimeout(timer);
       }
-      raw = await res.json();
-    } catch (err) {
-      if (controller.signal.aborted) {
-        log.warn({ timeoutMs }, "Stay22 request timed out; returning []");
-      } else {
-        log.warn({ err }, "Stay22 request failed; returning []");
-      }
-      return null;
-    } finally {
-      clearTimeout(timer);
     }
 
     const envelope = stay22EnvelopeSchema.safeParse(raw);
@@ -147,7 +204,11 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
     let totalDiscarded = 0;
     let totalPages = 0;
 
-    for (const offsetDays of STAY_WINDOW_OFFSETS_DAYS) {
+    const windows = opts?.maxWindows
+      ? STAY_WINDOW_OFFSETS_DAYS.slice(0, opts.maxWindows)
+      : STAY_WINDOW_OFFSETS_DAYS;
+
+    for (const offsetDays of windows) {
       const { checkin, checkout } = stayDates(offsetDays);
       const windowRecords: unknown[] = [];
       let nights: number | null | undefined;
@@ -167,9 +228,13 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
         currency = pageResult.meta.currency;
         totalPages += 1;
         const gotFullPage = pageResult.results.length === DEFAULT_PAGE_SIZE;
+        const hitPageCap =
+          opts?.maxPagesPerWindow !== undefined &&
+          page >= opts.maxPagesPerWindow;
         if (
           !pageResult.meta.hasMore ||
           !gotFullPage ||
+          hitPageCap ||
           windowRecords.length >= MAX_RESULTS
         ) {
           break;
@@ -208,7 +273,7 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
     const valid = [...byId.values()];
     log.info(
       {
-        windowsSearched: STAY_WINDOW_OFFSETS_DAYS.length,
+        windowsSearched: windows.length,
         pagesFetched: totalPages,
         received: totalReceived,
         uniqueValid: valid.length,
