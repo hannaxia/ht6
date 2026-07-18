@@ -18,10 +18,15 @@ import {
   storeSandboxHandoff,
 } from "../../lib/sandboxHandoff";
 
-// Special value requesting the opportunity grid over every place with
-// scraped hotel inventory (see api/src/routes/locations.ts), instead of a
-// single hardcoded city.
-const GRID_SCOPE = "nationwide";
+// The opportunity heatmap is scoped to Toronto: it's the only market with
+// seeded per-neighbourhood Location data, so it's the only place the score
+// actually varies. The "nationwide" grid gives every non-Toronto cell an
+// identical generic baseline (~96% of cells collapse to one value), which no
+// renderer can make look meaningful — so we show the city that has real
+// signal. A denser gridSize (vs the default 20) gives the heatmap a smoother
+// continuous field. Extending to more cities = seeding their Location data.
+const GRID_SCOPE = "toronto";
+const GRID_SIZE = 50;
 
 // Covers all of Canada (west,south,east,north). Hotel markers are now read
 // from MongoDB (populated by `pnpm --filter @innsight/api scrape:hotels`)
@@ -63,7 +68,7 @@ export default function DiscoverPage() {
       });
 
     locationsApi
-      .opportunityGrid({ city: GRID_SCOPE })
+      .opportunityGrid({ city: GRID_SCOPE, gridSize: GRID_SIZE })
       .then((res) => {
         if (cancelled) return;
         setCells(res.cells);

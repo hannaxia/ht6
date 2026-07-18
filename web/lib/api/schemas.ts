@@ -69,6 +69,10 @@ export const simulationResponseSchema = z.object({
 
 export const opportunityCellSchema = z.object({
   coordinates: coordinateSchema,
+  // Half-width/height of the cell in degrees — lets the map reconstruct the
+  // regular grid to interpolate a smooth raster.
+  cellHalfDegLat: z.number(),
+  cellHalfDegLng: z.number(),
   components: z.object({
     revenuePotential: z.number(),
     demand: z.number(),
