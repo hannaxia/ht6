@@ -212,7 +212,7 @@ export default function SandboxPage() {
         <button
           type="button"
           onClick={open}
-          className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100"
+          className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
         >
           AI Consultant
         </button>
@@ -295,7 +295,7 @@ export default function SandboxPage() {
         ) : (
           <a
             href="/auth/login?returnTo=/sandbox"
-            className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-medium shadow-lg hover:bg-slate-100"
+            className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-medium shadow-lg transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
             title="Log in to save this hotel to your profile"
           >
             Log in to save

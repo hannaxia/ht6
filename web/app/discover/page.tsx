@@ -265,7 +265,7 @@ export default function DiscoverPage() {
             <button
               type="button"
               onClick={open}
-              className="shrink-0 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-100"
+              className="shrink-0 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
             >
               AI Consultant
             </button>
