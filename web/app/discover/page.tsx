@@ -9,31 +9,15 @@ import { ApiError } from "../../lib/api/client";
 import { hotelsApi } from "../../lib/api/hotels";
 import { locationsApi } from "../../lib/api/locations";
 import type { OpportunityCell, Stay22Hotel } from "../../lib/api/schemas";
-import { isInOntario } from "../../lib/geo/ontarioBoundary";
 import { log } from "../../lib/log";
 
 const CITY = "toronto";
 
-/**
- * A single Ontario-spanning bbox (west,south,east,north) doesn't work: for
- * boxes this large (~2000km diagonal), Stay22 returns whichever properties
- * rank highest overall rather than spreading results across the box —
- * confirmed live, a full-Ontario bbox returned only Minnesota lake cabins,
- * none of which are even inside Ontario. Instead, query several
- * city-sized regions across the province (the size that reliably returns
- * local results) and merge. [west,south,east,north] each.
- */
-const ONTARIO_REGIONS: Record<string, string> = {
-  toronto: "-79.64,43.58,-79.12,43.85",
-  ottawa: "-76.0,45.2,-75.4,45.6",
-  hamiltonNiagara: "-80.1,42.9,-79.0,43.4",
-  londonWindsor: "-83.2,42.0,-80.9,43.1",
-  kingston: "-76.7,44.0,-76.2,44.4",
-  barrie: "-80.0,44.2,-79.4,44.6",
-  sudburyNorthBay: "-81.3,46.2,-79.2,46.7",
-  thunderBay: "-89.6,48.2,-89.0,48.6",
-  kenora: "-94.8,49.6,-94.3,49.9",
-};
+// Covers all of Canada (west,south,east,north). Hotel markers are now read
+// from MongoDB (populated by `pnpm --filter @innsight/api scrape:hotels`)
+// instead of calling Stay22 live on every page load, so a single wide query
+// is cheap — no per-region fan-out, no Stay22 rate-limit concern.
+const CANADA_BBOX = "-141.0,41.6,-52.6,83.1";
 
 export default function DiscoverPage() {
   const { open } = useAIConsultant();
@@ -43,45 +27,17 @@ export default function DiscoverPage() {
   const [gridError, setGridError] = useState<string | null>(null);
 
   useEffect(() => {
-    // React 18 Strict Mode (Next.js dev) double-invokes effects on mount,
-    // firing this whole fetch fan-out twice. Without a cancellation guard,
-    // whichever invocation resolves last wins the state update — if the
-    // second run hits any hiccup (partial region failure, slower network),
-    // it can silently overwrite a good first result with a worse one. This
-    // matched the exact symptom: markers/heatmap flash correctly, then
-    // clear. `cancelled` ensures a stale run's results are dropped instead
-    // of applied.
+    // Guards against React 18 Strict Mode's dev-mode double effect
+    // invocation overwriting a good result with a stale one.
     let cancelled = false;
 
-    Promise.allSettled(
-      Object.entries(ONTARIO_REGIONS).map(([name, bbox]) =>
-        hotelsApi.list({ bbox }).then((res) => ({ name, hotels: res.hotels })),
-      ),
-    )
-      .then((results) => {
+    hotelsApi
+      .list({ bbox: CANADA_BBOX })
+      .then((res) => {
         if (cancelled) return;
-        const byId = new Map<string, Stay22Hotel>();
-        let anySucceeded = false;
-        for (const result of results) {
-          if (result.status !== "fulfilled") continue;
-          anySucceeded = true;
-          for (const hotel of result.value.hotels) {
-            // Ontario regions are hand-picked rectangles, not the exact
-            // province boundary — filter out anything that lands outside
-            // the real Ontario polygon (e.g. Windsor's box also touches
-            // Michigan).
-            if (isInOntario(hotel.coordinates.lng, hotel.coordinates.lat)) {
-              byId.set(hotel.id, hotel);
-            }
-          }
-        }
-        if (!anySucceeded) {
-          throw new Error("all region requests failed");
-        }
-        const merged = [...byId.values()];
-        setHotels(merged);
+        setHotels(res.hotels);
         setHotelError(null);
-        log.info("hotels loaded", merged.length);
+        log.info("hotels loaded", res.hotels.length);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -114,11 +70,12 @@ export default function DiscoverPage() {
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-6 py-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Market Discovery — Ontario</h1>
+          <h1 className="text-xl font-bold">Market Discovery — Canada</h1>
           <p className="text-sm text-slate-600">
-            Hotel markers are Stay22 inventory across Ontario; the
-            opportunity heatmap (Toronto only) shows estimated opportunity
-            scores (simulation, not real financial data).
+            Hotel markers are Stay22 inventory across Canada (periodically
+            refreshed); the opportunity heatmap (Toronto only) shows
+            estimated opportunity scores (simulation, not real financial
+            data).
           </p>
         </div>
         <button

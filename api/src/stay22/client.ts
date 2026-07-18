@@ -27,6 +27,14 @@ const STAY_WINDOW_OFFSETS_DAYS = [30, 60, 90, 120];
 export interface Stay22SearchOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * Caps how many of STAY_WINDOW_OFFSETS_DAYS are queried (default: all).
+   * Bulk/scrape callers pass a low value to keep per-call request volume
+   * small — live/interactive callers should leave this unset.
+   */
+  maxWindows?: number;
+  /** Caps pages fetched per stay window (default: unlimited, up to MAX_RESULTS). */
+  maxPagesPerWindow?: number;
 }
 
 export interface BoundingBox {
@@ -147,7 +155,11 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
     let totalDiscarded = 0;
     let totalPages = 0;
 
-    for (const offsetDays of STAY_WINDOW_OFFSETS_DAYS) {
+    const windows = opts?.maxWindows
+      ? STAY_WINDOW_OFFSETS_DAYS.slice(0, opts.maxWindows)
+      : STAY_WINDOW_OFFSETS_DAYS;
+
+    for (const offsetDays of windows) {
       const { checkin, checkout } = stayDates(offsetDays);
       const windowRecords: unknown[] = [];
       let nights: number | null | undefined;
@@ -167,9 +179,13 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
         currency = pageResult.meta.currency;
         totalPages += 1;
         const gotFullPage = pageResult.results.length === DEFAULT_PAGE_SIZE;
+        const hitPageCap =
+          opts?.maxPagesPerWindow !== undefined &&
+          page >= opts.maxPagesPerWindow;
         if (
           !pageResult.meta.hasMore ||
           !gotFullPage ||
+          hitPageCap ||
           windowRecords.length >= MAX_RESULTS
         ) {
           break;
@@ -208,7 +224,7 @@ export function createStay22Client(env: Env, logger: Logger): Stay22Client {
     const valid = [...byId.values()];
     log.info(
       {
-        windowsSearched: STAY_WINDOW_OFFSETS_DAYS.length,
+        windowsSearched: windows.length,
         pagesFetched: totalPages,
         received: totalReceived,
         uniqueValid: valid.length,

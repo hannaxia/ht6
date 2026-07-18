@@ -9,7 +9,8 @@
     "type-check": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "smoke": "tsx src/scripts/engineSmoke.ts",
-    "seed:locations": "tsx src/scripts/seedLocations.ts"
+    "seed:locations": "tsx src/scripts/seedLocations.ts",
+    "scrape:hotels": "tsx src/scripts/scrapeCanadianHotels.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
