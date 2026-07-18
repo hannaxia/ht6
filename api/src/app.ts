@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 import type { AIConsultant } from "./ai/consultant.js";
 import type { MongoConnection } from "./db/mongo.js";
 import type { Env } from "./env.js";
+import type { MLClient } from "./ml/mlClient.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import {
   errorHandlerMiddleware,
@@ -25,6 +26,7 @@ export interface AppDependencies {
   stay22: Stay22Client;
   simulation: SimulationEngine;
   ai: AIConsultant;
+  mlClient: MLClient;
 }
 
 export function createApp(deps: AppDependencies): express.Express {

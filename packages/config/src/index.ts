@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 import { amenityImpactCap, amenityImpactTable } from "./amenityImpact.js";
 import { competitionWeighting } from "./competition.js";
 import { costTable } from "./cost.js";
+import { usdToCadRate } from "./currency.js";
 import { operatingMargin } from "./operating.js";
 import { opportunityWeights } from "./opportunity.js";
 import { riskWeights } from "./risk.js";
@@ -13,6 +14,7 @@ export { competitionWeighting } from "./competition.js";
 export type { CompetitionWeighting } from "./competition.js";
 export { costTable } from "./cost.js";
 export type { CostTable } from "./cost.js";
+export { usdToCadRate } from "./currency.js";
 export { operatingMargin } from "./operating.js";
 export { opportunityWeights } from "./opportunity.js";
 export type { OpportunityWeights } from "./opportunity.js";
@@ -34,6 +36,7 @@ export function loadConfig(logger: Logger): LoadedConfig {
     operatingMargin,
     riskWeights,
     opportunityWeights,
+    usdToCadRate,
   };
   const parsed = configSchema.safeParse(config);
   if (!parsed.success) {

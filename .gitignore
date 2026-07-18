@@ -8,6 +8,7 @@ dist/
 coverage/
 *.tsbuildinfo
 .kiro/
+.kiro\specs\innsight-scaffold
 .config/
 CLAUDE.md
 .venv/

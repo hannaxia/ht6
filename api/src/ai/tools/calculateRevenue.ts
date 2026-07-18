@@ -24,7 +24,7 @@ export const calculateRevenueTool: Tool<
   argsSchema,
   resultSchema,
   async handler(args, ctx) {
-    const output = ctx.engine.simulateHotel(args.config);
+    const output = await ctx.engine.simulateHotel(args.config);
     ctx.logger.info(
       { tool: "calculateRevenue", revenue: output.revenue },
       "calculateRevenue executed",

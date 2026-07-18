@@ -10,7 +10,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w api\" \"npm run dev -w web\"",
+    "dev": "concurrently -n ml,api,web -c magenta,blue,green \"npm run dev:ml\" \"npm run dev -w api\" \"npm run dev -w web\"",
+    "dev:ml": ".venv\\Scripts\\python.exe -m uvicorn main:app --app-dir ml/service --port 8000",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present",

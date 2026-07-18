@@ -10,7 +10,7 @@ export function ChangeSummary({
   after: Partial<SimulateHotelOutput>;
 }) {
   const rows: { label: string; b?: number; a?: number; fmt: (v: number) => string }[] = [
-    { label: "ADR", b: before.adr, a: after.adr, fmt: (v) => `$${v.toFixed(0)}` },
+    { label: "ADR", b: before.adr, a: after.adr, fmt: (v) => `$${v.toFixed(0)} CAD` },
     {
       label: "Occupancy",
       b: before.occupancy,
@@ -27,7 +27,7 @@ export function ChangeSummary({
       label: "Revenue",
       b: before.revenue,
       a: after.revenue,
-      fmt: (v) => `$${Math.round(v).toLocaleString()}`,
+      fmt: (v) => `$${Math.round(v).toLocaleString()} CAD`,
     },
   ];
   return (
