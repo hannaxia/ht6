@@ -7,12 +7,20 @@ import { DiscoverMap, type PlacedPin } from "../../components/discover/DiscoverM
 import { DiscoverSidebar } from "../../components/discover/DiscoverSidebar";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
 import { useAIConsultant } from "../../contexts/AIConsultantContext";
+import { useSession } from "../../contexts/SessionContext";
 import { ApiError } from "../../lib/api/client";
 import { hotelsApi } from "../../lib/api/hotels";
 import { locationsApi } from "../../lib/api/locations";
-import type { OpportunityCell, Stay22Hotel } from "../../lib/api/schemas";
+import { savedHotelsApi } from "../../lib/api/savedHotels";
+import type {
+  HotelConfigPayload,
+  OpportunityCell,
+  SavedHotel,
+  Stay22Hotel,
+} from "../../lib/api/schemas";
 import { log } from "../../lib/log";
 import {
+  applyLocationContext,
   hotelToConfig,
   placedHotelConfig,
   storeSandboxHandoff,
@@ -37,15 +45,20 @@ const CANADA_BBOX = "-141.0,41.6,-52.6,83.1";
 export default function DiscoverPage() {
   const router = useRouter();
   const { open } = useAIConsultant();
+  const { sessionId, isAuthenticated } = useSession();
   const [hotels, setHotels] = useState<Stay22Hotel[]>([]);
   const [cells, setCells] = useState<OpportunityCell[]>([]);
+  const [savedHotels, setSavedHotels] = useState<SavedHotel[]>([]);
   const [hotelError, setHotelError] = useState<string | null>(null);
   const [gridError, setGridError] = useState<string | null>(null);
 
   // Sidebar selection state: at most one of these is active at a time.
   const [selectedHotel, setSelectedHotel] = useState<Stay22Hotel | null>(null);
+  const [selectedSaved, setSelectedSaved] = useState<SavedHotel | null>(null);
   const [placedPin, setPlacedPin] = useState<PlacedPin | null>(null);
   const [newHotelName, setNewHotelName] = useState("");
+  // True while fetching location context before navigating to the sandbox.
+  const [configuring, setConfiguring] = useState(false);
 
   useEffect(() => {
     // Guards against React 18 Strict Mode's dev-mode double effect
@@ -87,40 +100,137 @@ export default function DiscoverPage() {
     };
   }, []);
 
+  // Load the logged-in user's saved hotels (red markers). If arriving from the
+  // profile's "View on map" (?focus=<id>), open that hotel's sidebar once
+  // loaded.
+  useEffect(() => {
+    if (!isAuthenticated || sessionId === "ssr") {
+      setSavedHotels([]);
+      return;
+    }
+    let cancelled = false;
+    savedHotelsApi
+      .list(sessionId)
+      .then((res) => {
+        if (cancelled) return;
+        setSavedHotels(res.savedHotels);
+        log.info("saved hotels loaded", res.savedHotels.length);
+        const focusId =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("focus")
+            : null;
+        if (focusId) {
+          const match = res.savedHotels.find((h) => h.id === focusId);
+          if (match) {
+            setSelectedHotel(null);
+            setPlacedPin(null);
+            setSelectedSaved(match);
+          }
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const code = err instanceof ApiError ? err.errorCode : "internal_error";
+        log.warn("saved hotels load failed", code);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, sessionId]);
+
   function handleSelectHotel(hotel: Stay22Hotel) {
+    setConfiguring(false);
     setPlacedPin(null);
+    setSelectedSaved(null);
     setSelectedHotel(hotel);
   }
 
-  function handlePlaceHotel(coords: PlacedPin) {
+  function handleSelectSaved(saved: SavedHotel) {
+    setConfiguring(false);
+    setPlacedPin(null);
     setSelectedHotel(null);
+    setSelectedSaved(saved);
+  }
+
+  function handlePlaceHotel(coords: PlacedPin) {
+    setConfiguring(false);
+    setSelectedHotel(null);
+    setSelectedSaved(null);
     setNewHotelName("");
     setPlacedPin(coords);
   }
 
   function closeSidebar() {
+    setConfiguring(false);
     setSelectedHotel(null);
+    setSelectedSaved(null);
     setPlacedPin(null);
   }
 
-  function configureExistingHotel() {
-    if (!selectedHotel) return;
+  // Enrich a config with the coordinate's real market context (nearby
+  // inventory pricing, competitors, seeded location scores). Best-effort:
+  // if the lookup fails, fall back to the un-enriched config so the user can
+  // still proceed to the sandbox.
+  async function enrichWithContext(
+    base: HotelConfigPayload,
+    coords: PlacedPin,
+    opts: { excludeHotelId?: string; keepBasePrice?: boolean },
+  ): Promise<HotelConfigPayload> {
+    try {
+      const ctx = await locationsApi.context({
+        lat: coords.lat,
+        lng: coords.lng,
+        excludeHotelId: opts.excludeHotelId,
+      });
+      return applyLocationContext(base, ctx, {
+        keepBasePrice: opts.keepBasePrice,
+      });
+    } catch (err) {
+      const code = err instanceof ApiError ? err.errorCode : "internal_error";
+      log.warn("location context lookup failed; using base config", code);
+      return base;
+    }
+  }
+
+  async function configureExistingHotel() {
+    if (!selectedHotel || configuring) return;
+    setConfiguring(true);
+    const config = await enrichWithContext(
+      hotelToConfig(selectedHotel),
+      selectedHotel.coordinates,
+      { excludeHotelId: selectedHotel.id, keepBasePrice: !!selectedHotel.price },
+    );
     storeSandboxHandoff({
       label: selectedHotel.name,
       origin: "existing",
-      config: hotelToConfig(selectedHotel),
+      config,
+      isCustom: false,
     });
     router.push("/sandbox");
   }
 
-  function configurePlacedHotel() {
-    if (!placedPin) return;
+  async function configurePlacedHotel() {
+    if (!placedPin || configuring) return;
     const name = newHotelName.trim();
     if (!name) return;
+    setConfiguring(true);
+    const config = await enrichWithContext(
+      placedHotelConfig(placedPin),
+      placedPin,
+      {},
+    );
+    storeSandboxHandoff({ label: name, origin: "new", config, isCustom: true });
+    router.push("/sandbox");
+  }
+
+  function configureSavedHotel() {
+    if (!selectedSaved) return;
     storeSandboxHandoff({
-      label: name,
-      origin: "new",
-      config: placedHotelConfig(placedPin),
+      label: selectedSaved.name,
+      origin: "saved",
+      config: selectedSaved.config,
+      savedHotelId: selectedSaved.id,
+      isCustom: selectedSaved.isCustom,
     });
     router.push("/sandbox");
   }
@@ -130,9 +240,12 @@ export default function DiscoverPage() {
       <DiscoverMap
         hotels={hotels}
         cells={cells}
+        savedHotels={savedHotels}
         selectedHotelId={selectedHotel?.id ?? null}
+        selectedSavedId={selectedSaved?.id ?? null}
         placedPin={placedPin}
         onSelectHotel={handleSelectHotel}
+        onSelectSaved={handleSelectSaved}
         onPlaceHotel={handlePlaceHotel}
       />
 
@@ -187,10 +300,13 @@ export default function DiscoverPage() {
 
       <DiscoverSidebar
         selectedHotel={selectedHotel}
+        selectedSaved={selectedSaved}
         placedPin={placedPin}
         newHotelName={newHotelName}
+        busy={configuring}
         onNewHotelNameChange={setNewHotelName}
         onConfigureHotel={configureExistingHotel}
+        onConfigureSaved={configureSavedHotel}
         onConfigurePlaced={configurePlacedHotel}
         onClose={closeSidebar}
       />

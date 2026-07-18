@@ -117,19 +117,6 @@ export function SandboxForm({
             className="w-full"
           />
         </FormField>
-        <FormField
-          label={`Renovation: ${(config.renovationDelta * 100).toFixed(0)}%`}
-        >
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={config.renovationDelta}
-            onChange={(e) => set("renovationDelta", Number(e.target.value))}
-            className="w-full"
-          />
-        </FormField>
       </div>
 
       <div>

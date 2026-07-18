@@ -1,4 +1,8 @@
-import type { HotelConfigPayload, Stay22Hotel } from "./api/schemas";
+import type {
+  HotelConfigPayload,
+  LocationContext,
+  Stay22Hotel,
+} from "./api/schemas";
 import { AMENITIES } from "../components/sandbox/amenities";
 
 /**
@@ -14,9 +18,20 @@ const HANDOFF_KEY = "innsight:sandbox-handoff";
 
 export interface SandboxHandoff {
   label: string;
-  /** "existing" = cloned from a Stay22 hotel; "new" = user-placed pin. */
-  origin: "existing" | "new";
+  /**
+   * "existing" = cloned from a Stay22 hotel; "new" = user-placed pin;
+   * "saved" = reopened from the user's saved hotels (profile or map).
+   */
+  origin: "existing" | "new" | "saved";
   config: HotelConfigPayload;
+  /** Set when reopening a saved hotel, so Save updates it instead of forking. */
+  savedHotelId?: string;
+  /**
+   * True for a from-scratch hotel (placed pin, or a saved hotel that was
+   * originally one). Drives whether the sandbox lets the user rename it —
+   * hotels cloned from a real Stay22 listing keep that listing's name.
+   */
+  isCustom: boolean;
 }
 
 /** Baseline config used for a freshly placed hotel and as a mapping fallback. */
@@ -25,7 +40,6 @@ export const DEFAULT_CONFIG: HotelConfigPayload = {
   rooms: 150,
   stars: 4,
   modernity: 0.7,
-  renovationDelta: 0,
   amenities: ["wifi", "breakfast"],
   targetSegment: "mixed",
   basePrice: 180,
@@ -101,6 +115,35 @@ export function placedHotelConfig(coords: {
     location: {
       ...DEFAULT_CONFIG.location,
       coordinates: { lat: coords.lat, lng: coords.lng },
+    },
+  };
+}
+
+/**
+ * Merge a resolved location context (real nearby inventory + seeded location
+ * scores) into a config, so the sandbox starts from the actual market rather
+ * than defaults. `keepBasePrice` preserves an existing hotel's own nightly
+ * rate as its ADR baseline while still adopting the area's segment norm and
+ * competitor set; a placed pin leaves it false to take the area median.
+ */
+export function applyLocationContext(
+  config: HotelConfigPayload,
+  ctx: LocationContext,
+  { keepBasePrice = false }: { keepBasePrice?: boolean } = {},
+): HotelConfigPayload {
+  return {
+    ...config,
+    basePrice: keepBasePrice ? config.basePrice : ctx.basePrice,
+    segmentAdrNorm: ctx.segmentAdrNorm,
+    competitors: ctx.competitors,
+    location: {
+      ...config.location,
+      type: ctx.location.type,
+      scores: ctx.location.scores,
+      coordinates: ctx.location.coordinates,
+      baseDemand: ctx.location.baseDemand,
+      locationDemand: ctx.location.locationDemand,
+      locationSatisfaction: ctx.location.locationSatisfaction,
     },
   };
 }

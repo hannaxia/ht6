@@ -15,6 +15,7 @@ import { aiRouter } from "./routes/ai.js";
 import { healthRouter } from "./routes/health.js";
 import { hotelsRouter } from "./routes/hotels.js";
 import { locationsRouter } from "./routes/locations.js";
+import { savedHotelsRouter } from "./routes/savedHotels.js";
 import { simulationsRouter } from "./routes/simulations.js";
 import type { SimulationEngine } from "./simulation/index.js";
 import type { Stay22Client } from "./stay22/client.js";
@@ -39,6 +40,7 @@ export function createApp(deps: AppDependencies): express.Express {
   app.use("/hotels", hotelsRouter(deps));
   app.use("/locations", locationsRouter(deps));
   app.use("/simulations", simulationsRouter(deps));
+  app.use("/saved-hotels", savedHotelsRouter(deps));
   app.use("/ai", aiRouter(deps));
   app.use(notFoundHandler);
   app.use(errorHandlerMiddleware(deps.logger));

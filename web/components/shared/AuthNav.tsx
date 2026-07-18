@@ -20,9 +20,12 @@ export async function AuthNav() {
     <nav className="flex items-center gap-4 text-sm" aria-label="Account">
       {session ? (
         <>
-          <span className="hidden text-slate-600 sm:inline">
-            {session.user.name ?? session.user.email ?? "Signed in"}
-          </span>
+          <Link
+            href="/profile"
+            className="text-slate-600 hover:text-slate-950"
+          >
+            {session.user.name ?? session.user.email ?? "Profile"}
+          </Link>
           <a
             href="/auth/logout"
             className="rounded border border-slate-300 bg-white px-3 py-1.5 font-medium hover:bg-slate-100"

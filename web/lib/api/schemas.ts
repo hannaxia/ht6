@@ -93,6 +93,41 @@ export const opportunityGridResponseSchema = z.object({
   disclaimer: z.string().optional(),
 });
 
+export const locationContextResponseSchema = z.object({
+  location: z.object({
+    type: z.enum([
+      "downtown",
+      "airport",
+      "resort",
+      "business_district",
+      "suburban",
+    ]),
+    scores: z.object({
+      transit: z.number(),
+      airport: z.number(),
+      tourism: z.number(),
+      business: z.number(),
+    }),
+    coordinates: coordinateSchema,
+    baseDemand: z.number(),
+    locationDemand: z.number(),
+    locationSatisfaction: z.number(),
+  }),
+  basePrice: z.number(),
+  segmentAdrNorm: z.number(),
+  competitors: z.array(
+    z.object({
+      stars: z.number().optional(),
+      hotelType: z.string().optional(),
+      pricePerNight: z.number().optional(),
+      coordinates: coordinateSchema,
+    }),
+  ),
+  nearbyHotelCount: z.number(),
+  source: z.enum(["stay22", "database", "baseline"]),
+  disclaimer: z.string().optional(),
+});
+
 export const aiConsultResponseSchema = z.object({
   message: z.string(),
   deltas: z.object({
@@ -106,42 +141,74 @@ export type Stay22Hotel = z.infer<typeof stay22HotelSchema>;
 export type SimulateHotelOutput = z.infer<typeof simulateHotelOutputSchema>;
 export type OpportunityCell = z.infer<typeof opportunityCellSchema>;
 export type AiConsultResponse = z.infer<typeof aiConsultResponseSchema>;
+export type LocationContext = z.infer<typeof locationContextResponseSchema>;
 
 /** The sandbox hotel configuration sent to POST /simulations. */
-export interface HotelConfigPayload {
-  hotelType:
-    | "budget"
-    | "midscale"
-    | "upscale"
-    | "luxury"
-    | "resort"
-    | "extended_stay";
-  rooms: number;
-  stars: 1 | 2 | 3 | 4 | 5;
-  modernity: number;
-  renovationDelta: number;
-  amenities: string[];
-  targetSegment: "leisure" | "business" | "mixed";
-  basePrice: number;
-  segmentAdrNorm: number;
-  location: {
-    type:
-      | "downtown"
-      | "airport"
-      | "resort"
-      | "business_district"
-      | "suburban";
-    scores: {
-      transit: number;
-      airport: number;
-      tourism: number;
-      business: number;
-    };
-    coordinates: { lat: number; lng: number };
-    baseDemand: number;
-    locationDemand: number;
-    locationSatisfaction: number;
-  };
-  competitors: unknown[];
-  baseRating: number;
-}
+export const hotelConfigPayloadSchema = z.object({
+  hotelType: z.enum([
+    "budget",
+    "midscale",
+    "upscale",
+    "luxury",
+    "resort",
+    "extended_stay",
+  ]),
+  rooms: z.number(),
+  stars: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+  ]),
+  modernity: z.number(),
+  amenities: z.array(z.string()),
+  targetSegment: z.enum(["leisure", "business", "mixed"]),
+  basePrice: z.number(),
+  segmentAdrNorm: z.number(),
+  location: z.object({
+    type: z.enum([
+      "downtown",
+      "airport",
+      "resort",
+      "business_district",
+      "suburban",
+    ]),
+    scores: z.object({
+      transit: z.number(),
+      airport: z.number(),
+      tourism: z.number(),
+      business: z.number(),
+    }),
+    coordinates: coordinateSchema,
+    baseDemand: z.number(),
+    locationDemand: z.number(),
+    locationSatisfaction: z.number(),
+  }),
+  competitors: z.array(z.unknown()),
+  baseRating: z.number(),
+});
+
+export type HotelConfigPayload = z.infer<typeof hotelConfigPayloadSchema>;
+
+/** A saved sandbox hotel returned by the /saved-hotels endpoints. */
+export const savedHotelSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  isCustom: z.boolean(),
+  config: hotelConfigPayloadSchema,
+  metrics: simulateHotelOutputSchema.partial().nullable(),
+  coordinates: coordinateSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const savedHotelListResponseSchema = z.object({
+  savedHotels: z.array(savedHotelSchema),
+});
+
+export const savedHotelResponseSchema = z.object({
+  savedHotel: savedHotelSchema,
+});
+
+export type SavedHotel = z.infer<typeof savedHotelSchema>;

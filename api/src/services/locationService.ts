@@ -7,8 +7,14 @@ import type {
   OpportunityCell,
   SimulationEngine,
 } from "../simulation/index.js";
-import type { CompetitorHotel } from "../simulation/types.js";
+import type {
+  CompetitorHotel,
+  LocationScores,
+  LocationType,
+} from "../simulation/types.js";
 import type { Stay22Client } from "../stay22/client.js";
+import type { Stay22Hotel } from "../stay22/schemas.js";
+import { searchHotelsFromDb } from "./hotelService.js";
 
 /**
  * City bounding boxes for the demo. Extend as cities are added. Geographic
@@ -391,4 +397,178 @@ export async function computeNationwideOpportunityGrid(
   logger.info({ scope: NATIONWIDE_CACHE_SCOPE }, "nationwide grid cache updated");
 
   return { cells: valid, cached: false };
+}
+
+// --- Single-coordinate location context (sandbox seeding) ---------------
+
+/** Radius (km) searched for nearby inventory when resolving one coordinate. */
+const CONTEXT_STAY22_RADIUS_KM = 5;
+// The Hotels-collection fallback uses a wider radius since scraped inventory
+// is sparser than a live Stay22 area search.
+const CONTEXT_DB_RADIUS_KM = 10;
+
+function isInToronto(coord: { lat: number; lng: number }): boolean {
+  const b = CITY_BBOXES.toronto;
+  if (!b) return false;
+  return (
+    coord.lat >= b.south &&
+    coord.lat <= b.north &&
+    coord.lng >= b.west &&
+    coord.lng <= b.east
+  );
+}
+
+function median(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1]! + sorted[mid]!) / 2
+    : sorted[mid]!;
+}
+
+function nightlyPrice(hotel: Stay22Hotel): number | undefined {
+  return hotel.price?.per === "night" && hotel.price.amount > 0
+    ? hotel.price.amount
+    : undefined;
+}
+
+export interface ResolvedLocationContext {
+  location: {
+    type: LocationType;
+    scores: LocationScores;
+    coordinates: { lat: number; lng: number };
+    baseDemand: number;
+    locationDemand: number;
+    locationSatisfaction: number;
+  };
+  basePrice: number;
+  segmentAdrNorm: number;
+  competitors: CompetitorHotel[];
+  nearbyHotelCount: number;
+  source: "stay22" | "database" | "baseline";
+}
+
+/**
+ * Resolves the market/location context for a single coordinate so the
+ * sandbox can seed a hotel from real surroundings instead of arbitrary
+ * defaults. Combines:
+ *  - seeded Location scores (Toronto only, nearest doc) → transit/tourism/etc.,
+ *  - a live Stay22 area requery (falling back to the Hotels collection, then
+ *    to city/generic baselines) → segment ADR norm + real competitors.
+ *
+ * Every value is a simulation input, never presented as real financial data.
+ * Degrades gracefully: with no DB and no Stay22 key it returns clearly-marked
+ * baseline figures rather than failing.
+ */
+export async function resolveLocationContext(
+  coord: { lat: number; lng: number },
+  mongo: MongoConnection,
+  stay22: Stay22Client,
+  logger: Logger,
+  opts: { excludeHotelId?: string } = {},
+): Promise<ResolvedLocationContext> {
+  const inToronto = isInToronto(coord);
+  const baseline =
+    inToronto && CITY_BASELINES.toronto
+      ? CITY_BASELINES.toronto
+      : GENERIC_BASELINE;
+
+  // 1. Location scores from seeded Location data (Toronto only for now).
+  let scores: LocationScores = {
+    transit: 0.5,
+    airport: 0.3,
+    tourism: 0.5,
+    business: 0.5,
+  };
+  if (inToronto && mongo.readiness === "ready") {
+    try {
+      const locations = await mongo.models.Location.find({ city: /^toronto$/i })
+        .lean<LocationDoc[]>()
+        .exec();
+      const near = nearestLocation(locations, coord);
+      if (near) {
+        scores = {
+          transit: near.transit_score,
+          airport: 0.3,
+          tourism: near.tourism_score,
+          business: near.business_score,
+        };
+      }
+    } catch (err) {
+      logger.warn({ err }, "location score lookup failed; using neutral scores");
+    }
+  }
+
+  // 2. Nearby inventory: live Stay22 requery → DB fallback → baseline.
+  let nearby: Stay22Hotel[] = [];
+  let source: ResolvedLocationContext["source"] = "baseline";
+  if (stay22.readiness === "ready") {
+    try {
+      nearby = await stay22.searchByRadius(coord, CONTEXT_STAY22_RADIUS_KM, {
+        maxWindows: 1,
+        maxPagesPerWindow: 1,
+      });
+      if (nearby.length > 0) source = "stay22";
+    } catch (err) {
+      logger.warn({ err }, "Stay22 context requery failed; falling back to DB");
+    }
+  }
+  if (nearby.length === 0 && mongo.readiness === "ready") {
+    try {
+      nearby = await searchHotelsFromDb(
+        mongo,
+        { lat: coord.lat, lng: coord.lng, radiusKm: CONTEXT_DB_RADIUS_KM },
+        logger,
+      );
+      if (nearby.length > 0) source = "database";
+    } catch (err) {
+      logger.warn({ err }, "DB context lookup failed; using baseline");
+    }
+  }
+
+  const others = opts.excludeHotelId
+    ? nearby.filter((h) => h.id !== opts.excludeHotelId)
+    : nearby;
+
+  // 3. Price context from real nearby nightly rates (median is robust to
+  //    the odd luxury/budget outlier).
+  const medianNightly = median(
+    others.map(nightlyPrice).filter((n): n is number => n !== undefined),
+  );
+  const basePrice = medianNightly ?? baseline.basePrice;
+  const segmentAdrNorm = medianNightly ?? baseline.segmentAdrNorm;
+
+  const competitors: CompetitorHotel[] = others.map((h) => ({
+    stars: h.stars,
+    pricePerNight: nightlyPrice(h),
+    coordinates: h.coordinates,
+  }));
+
+  logger.info(
+    {
+      coord,
+      inToronto,
+      nearby: others.length,
+      source,
+      basePrice,
+    },
+    "resolved location context",
+  );
+
+  return {
+    location: {
+      type: inToronto ? "downtown" : "suburban",
+      scores,
+      coordinates: coord,
+      baseDemand: baseline.baseDemand,
+      locationDemand: 10 * (scores.tourism + scores.business) - 5,
+      locationSatisfaction: 0.3 * scores.transit - 0.1,
+    },
+    basePrice,
+    segmentAdrNorm,
+    competitors,
+    nearbyHotelCount: others.length,
+    source,
+  };
 }
