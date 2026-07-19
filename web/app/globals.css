@@ -13,7 +13,13 @@ body {
 /* Text selection ("highlight by the cursor") uses the sage accent app-wide. */
 ::selection { background: #6f9c7f; color: #fff; }
 
-:root { --landing-ink: #17231f; --landing-paper: #f7f8f6; --landing-copper: #b97138; }
+:root { --landing-ink: #17231f; --landing-paper: #f7f8f6; --landing-copper: #b97138; --page-gutter: clamp(3rem, 8vw, 10rem); }
+.site-header { position: relative; z-index: 20; border: 0; background: var(--landing-paper); }
+.site-header-inner { width: 100%; padding: .65rem var(--page-gutter); }
+.site-brand { display: inline-flex; align-items: center; gap: .6rem; color: var(--landing-ink); text-decoration: none; }
+.site-brand-mark { display: block; width: 2rem; height: 2rem; object-fit: contain; }
+.site-brand-name { font-size: 1.35rem; font-weight: 700; line-height: 1; letter-spacing: -.035em; }
+.site-brand-name span { color: #ef3033; }
 .landing-shell { position: relative; min-height: 100%; overflow: hidden; isolation: isolate; background: var(--landing-paper); color: var(--landing-ink); }
 .landing-city { --city-shift-x: 0px; --city-shift-y: 0px; position: absolute; inset: 0; z-index: -3; overflow: hidden; }
 .landing-city canvas { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; }
@@ -40,15 +46,14 @@ body {
 .fallback-tower-leg-left { margin-left: -1.45rem; transform: translateX(-50%) rotate(13deg) !important; }
 .fallback-tower-leg-right { margin-left: 1.45rem; transform: translateX(-50%) rotate(-13deg) !important; }
 .landing-atmosphere { position: absolute; inset: 0; z-index: -2; pointer-events: none; background: linear-gradient(90deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.82) 34%, rgba(249,250,248,0) 56%), linear-gradient(0deg, rgba(231,234,233,.3), transparent 45%); }
-.landing-hero { display: flex; flex-direction: column; align-items: flex-start; width: min(820px, calc(100% - 3rem)); padding: clamp(4.5rem, 10vh, 8rem) 0 4rem clamp(1.5rem, 7vw, 7.5rem); }
+.landing-hero { display: flex; flex-direction: column; align-items: flex-start; width: min(820px, calc(100% - var(--page-gutter))); padding: clamp(6.5rem, 16vh, 11rem) 0 4rem var(--page-gutter); }
 .landing-hero h1 { margin: 0; font-family: "Lexend Deca", sans-serif; font-optical-sizing: auto; font-style: normal; font-size: clamp(3.7rem, 7.2vw, 7.4rem); font-weight: 500; line-height: .9; letter-spacing: -.05em; color: #17231f; }
 .landing-hero h1 .landing-i { color: #db3330; }
-.landing-tagline { margin: 1.15rem 0 0; max-width: 22rem; color: #6f9c7f; font-family: "Lexend Deca", sans-serif; font-optical-sizing: auto; font-style: normal; font-size: clamp(1.4rem, 2.6vw, 2rem); font-weight: 400; line-height: 1.15; letter-spacing: -.01em; }
-.landing-cta { display: inline-flex; align-items: center; gap: .55rem; margin-top: 2.75rem; padding: .9rem 2.1rem; border-radius: .25rem; background: #6f9c7f; color: #fff; font-size: 1.05rem; font-weight: 500; letter-spacing: .01em; text-decoration: none; transition: background .15s ease, transform .15s ease; }
+.landing-cta { display: inline-flex; align-items: center; gap: .55rem; margin-top: 2.25rem; padding: .9rem 2.1rem; border-radius: .25rem; background: #6f9c7f; color: #fff; font-size: 1.05rem; font-weight: 500; letter-spacing: .01em; text-decoration: none; transition: background .15s ease, transform .15s ease; }
 .landing-cta:hover { background: #5f8a6f; transform: translateY(-1px); }
 .landing-cta:hover .landing-cta-arrow { transform: translateX(3px); }
 .landing-cta:active { transform: translateY(0); }
 .landing-cta:focus-visible { outline: 3px solid #db3330; outline-offset: 3px; }
 .landing-cta-arrow { display: inline-block; font-size: 1.15em; line-height: 1; transition: transform .15s ease; }
-@media (max-width: 700px) { .landing-hero { display: flex; min-height: 100%; flex-direction: column; justify-content: flex-end; padding: 6rem 1.5rem 4rem; } .landing-hero h1 { font-size: clamp(3.4rem,17vw,5.5rem); } .landing-atmosphere { background: linear-gradient(0deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.68) 70%, transparent 100%); } .fallback-cn-tower { right: 10%; height: 76%; } .fallback-buildings { width: 100%; height: 35%; } }
+@media (max-width: 700px) { :root { --page-gutter: 1.5rem; } .landing-hero { display: flex; min-height: 100%; flex-direction: column; justify-content: flex-end; padding: 6rem var(--page-gutter) 4rem; } .landing-hero h1 { font-size: clamp(3.4rem,17vw,5.5rem); } .landing-atmosphere { background: linear-gradient(0deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.68) 70%, transparent 100%); } .fallback-cn-tower { right: 10%; height: 76%; } .fallback-buildings { width: 100%; height: 35%; } }
 @media (prefers-reduced-motion: reduce) { .landing-skyline-fallback { transition: none; } }

@@ -11,7 +11,12 @@ export const metadata: Metadata = {
   description:
     "AI-powered hospitality digital twin and hotel investment simulator. All metrics are simulation estimates.",
   icons: {
-    icon: "/favicon-innsight-transparent.png",
+    icon: {
+      url: "/favicon-innsight-new.png?v=20260719b",
+      type: "image/png",
+    },
+    shortcut: "/favicon-innsight-new.png?v=20260719b",
+    apple: "/favicon-innsight-new.png?v=20260719b",
   },
 };
 
@@ -33,19 +38,21 @@ export default async function RootLayout({
         />
       </head>
       <body className="flex h-screen flex-col bg-slate-50 text-slate-900 antialiased">
-        <header className="shrink-0 border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+        <header className="site-header shrink-0">
+          <div className="site-header-inner flex items-center justify-between">
             <div className="flex items-center gap-6">
-              <a href="/">
-                {/* Replace web/public/logo-innsight.png with your real wordmark */}
+              <a href="/" className="site-brand" aria-label="Innsight home">
                 <Image
-                  src="/logo-innsight.png"
-                  alt="Innsight"
-                  width={120}
-                  height={32}
-                  className="h-8 w-auto"
+                  src="/favicon-innsight-new.png"
+                  alt=""
+                  width={34}
+                  height={34}
+                  className="site-brand-mark"
                   priority
                 />
+                <span className="site-brand-name">
+                  Inns<span>i</span>ght
+                </span>
               </a>
               <SiteNav />
             </div>

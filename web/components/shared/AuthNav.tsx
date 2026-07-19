@@ -38,8 +38,6 @@ export async function AuthNav() {
 export function SiteNav() {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <NavLink href="/discover">Discover</NavLink>
-      <NavLink href="/sandbox">Sandbox</NavLink>
       <NavLink href="/about">About</NavLink>
     </div>
   );
