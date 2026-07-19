@@ -56,6 +56,8 @@ export default function DiscoverPage() {
   const [newHotelName, setNewHotelName] = useState("");
   // True while fetching location context before navigating to the sandbox.
   const [configuring, setConfiguring] = useState(false);
+  // The intro card is dismissible via its X button.
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     // Guards against React 18 Strict Mode's dev-mode double effect
@@ -248,44 +250,77 @@ export default function DiscoverPage() {
 
       {/* Floating header / hints over the map. */}
       <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-md">
-        <div className="pointer-events-auto rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
-          <div>
-            <h1 className="text-sm font-bold text-slate-900">
-              Market Discovery
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-600">
-              Each dot represents a hotel. Click a hotel to inspect it, or click
-              anywhere to drop a new hotel. The heatmap shows areas with higher
-              and lower opportunity for a new hotel, based on factors like
-              competition.
-            </p>
+        {showIntro ? (
+          <div className="pointer-events-auto rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-sm font-bold text-slate-900">
+                  Market Discovery
+                </h1>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  Each dot represents a hotel. Click a hotel to inspect it, or
+                  click anywhere to drop a new hotel. The heatmap shows areas
+                  with higher and lower opportunity for a new hotel, based on
+                  factors like competition.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIntro(false)}
+                aria-label="Dismiss"
+                title="Dismiss"
+                className="-mr-1 -mt-1 shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowIntro(true)}
+            aria-label="About Market Discovery"
+            title="About Market Discovery"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-sm font-bold text-slate-600 shadow-sm backdrop-blur hover:bg-slate-100 hover:text-slate-900"
+          >
+            i
+          </button>
+        )}
 
-          {hotelError ? (
-            <div className="mt-2">
-              <ErrorBanner
-                errorCode={hotelError}
-                message={
-                  hotelError === "network_error"
-                    ? "Could not reach the Innsight API — is it running on port 4000?"
-                    : "Hotels could not be loaded. If Stay22 is not configured, the map shows no hotels."
-                }
-              />
-            </div>
-          ) : null}
-          {gridError ? (
-            <div className="mt-2">
-              <ErrorBanner
-                errorCode={gridError}
-                message={
-                  gridError === "database_unavailable"
-                    ? "MongoDB is not configured — the opportunity heatmap needs it (README → Setup checklist → MongoDB Atlas)."
-                    : "Opportunity grid could not be loaded."
-                }
-              />
-            </div>
-          ) : null}
-        </div>
+        {hotelError ? (
+          <div className="pointer-events-auto mt-2 rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+            <ErrorBanner
+              errorCode={hotelError}
+              message={
+                hotelError === "network_error"
+                  ? "Could not reach the Innsight API — is it running on port 4000?"
+                  : "Hotels could not be loaded. If Stay22 is not configured, the map shows no hotels."
+              }
+            />
+          </div>
+        ) : null}
+        {gridError ? (
+          <div className="pointer-events-auto mt-2 rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+            <ErrorBanner
+              errorCode={gridError}
+              message={
+                gridError === "database_unavailable"
+                  ? "MongoDB is not configured — the opportunity heatmap needs it (README → Setup checklist → MongoDB Atlas)."
+                  : "Opportunity grid could not be loaded."
+              }
+            />
+          </div>
+        ) : null}
       </div>
 
       <DiscoverSidebar
