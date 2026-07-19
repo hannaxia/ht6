@@ -243,12 +243,33 @@ export function DiscoverMap({
     // Instantly snap to precisely frame the Toronto bbox (accounting for the
     // actual container size/padding) — no animated camera movement.
     map.once("load", () => {
+      const padding = { top: 60, right: 60, bottom: 60, left: 0 };
+      // fitBounds is a "contain" fit: it guarantees the whole bbox is visible,
+      // but if the container's aspect ratio doesn't match the bbox's, one axis
+      // fits exactly while the other is left with empty space (base map with
+      // no heatmap color). Once it settles, zoom in further ("cover" fit) so
+      // the heatmap always fills the full viewport, cropping whichever edge
+      // of the bbox doesn't match the window's aspect ratio.
+      map.once("moveend", () => {
+        const container = map.getContainer();
+        const availW = container.clientWidth - padding.left - padding.right;
+        const availH = container.clientHeight - padding.top - padding.bottom;
+        const nw = map.project([TORONTO_BBOX.west, TORONTO_BBOX.north]);
+        const se = map.project([TORONTO_BBOX.east, TORONTO_BBOX.south]);
+        const bboxPxW = Math.abs(se.x - nw.x);
+        const bboxPxH = Math.abs(se.y - nw.y);
+        if (!(bboxPxW > 0) || !(bboxPxH > 0)) return;
+        const scaleNeeded = Math.max(availW / bboxPxW, availH / bboxPxH);
+        if (scaleNeeded > 1.001) {
+          map.setZoom(map.getZoom() + Math.log2(scaleNeeded));
+        }
+      });
       map.fitBounds(
         [
           [TORONTO_BBOX.west, TORONTO_BBOX.south],
           [TORONTO_BBOX.east, TORONTO_BBOX.north],
         ],
-        { padding: { top: 60, right: 60, bottom: 60, left: 0 }, duration: 0 },
+        { padding, duration: 0 },
       );
     });
     return () => {
