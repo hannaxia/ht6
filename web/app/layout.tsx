@@ -12,11 +12,11 @@ export const metadata: Metadata = {
     "AI-powered hospitality digital twin and hotel investment simulator. All metrics are simulation estimates.",
   icons: {
     icon: {
-      url: "/favicon-innsight-new.png?v=20260719b",
+      url: "/favicon-innsight-transparent.png",
       type: "image/png",
     },
-    shortcut: "/favicon-innsight-new.png?v=20260719b",
-    apple: "/favicon-innsight-new.png?v=20260719b",
+    shortcut: "/favicon-innsight-transparent.png",
+    apple: "/favicon-innsight-transparent.png",
   },
 };
 
@@ -43,7 +43,7 @@ export default async function RootLayout({
             <div className="flex items-center gap-6">
               <a href="/" className="site-brand" aria-label="Innsight home">
                 <Image
-                  src="/favicon-innsight-new.png"
+                  src="/favicon-innsight-transparent.png"
                   alt=""
                   width={34}
                   height={34}

@@ -23,7 +23,7 @@ export default function LandingPage() {
         </h1>
         <p className="landing-tagline">Hotel market opportunities</p>
         <Link href="/discover" className="landing-cta">
-          Start Discovering
+          Get Started
           <span className="landing-cta-arrow" aria-hidden="true">&rarr;</span>
         </Link>
       </section>

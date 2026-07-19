@@ -61,6 +61,8 @@ const ZOOM_MAX = 2.2;
 const AUTO_ROTATE_SPEED = 0.005; // radians/frame
 const DRAG_ORBIT_SPEED = 0.008; // radians per pixel dragged
 const ZOOM_WHEEL_SPEED = 0.0015; // zoom-multiplier change per wheel deltaY unit
+const IDLE_RESET_MS = 3000; // ms of no interaction before auto-rotate resumes
+const RESET_LERP_SPEED = 0.03; // how fast the camera eases back to idle orbit
 
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -329,9 +331,20 @@ export function SandboxModel({
     let isDragging = false;
     let lastPointerX = 0;
     let lastPointerY = 0;
+    let lastInteraction = 0;
+    let resetting = false;
+
+    // The "home" elevation the camera returns to after idle.
+    const homeElevation = Math.asin(new THREE.Vector3(1, 0.55, 1).normalize().y);
+
+    function markInteraction() {
+      lastInteraction = performance.now();
+      autoRotate = false;
+      resetting = false;
+    }
 
     function onPointerDown(e: PointerEvent) {
-      autoRotate = false;
+      markInteraction();
       isDragging = true;
       lastPointerX = e.clientX;
       lastPointerY = e.clientY;
@@ -344,9 +357,10 @@ export function SandboxModel({
       const dy = e.clientY - lastPointerY;
       lastPointerX = e.clientX;
       lastPointerY = e.clientY;
-      azimuth += dx * DRAG_ORBIT_SPEED;
+      // Inverted: drag left rotates scene right (feels like grabbing the object)
+      azimuth -= dx * DRAG_ORBIT_SPEED;
       elevation = THREE.MathUtils.clamp(
-        elevation - dy * DRAG_ORBIT_SPEED,
+        elevation + dy * DRAG_ORBIT_SPEED,
         ELEVATION_MIN,
         ELEVATION_MAX,
       );
@@ -360,7 +374,9 @@ export function SandboxModel({
     }
     function onWheel(e: WheelEvent) {
       e.preventDefault();
-      zoom = THREE.MathUtils.clamp(zoom + e.deltaY * ZOOM_WHEEL_SPEED, ZOOM_MIN, ZOOM_MAX);
+      markInteraction();
+      // Inverted: scroll down zooms in (feels like pushing into the scene)
+      zoom = THREE.MathUtils.clamp(zoom - e.deltaY * ZOOM_WHEEL_SPEED, ZOOM_MIN, ZOOM_MAX);
     }
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointermove", onPointerMove);
@@ -453,6 +469,27 @@ export function SandboxModel({
     function animate() {
       if (disposed) return;
       frame = requestAnimationFrame(animate);
+
+      // After IDLE_RESET_MS of no interaction, smoothly ease back to the
+      // default orbit and resume auto-rotation.
+      if (!autoRotate && !isDragging) {
+        const idle = performance.now() - lastInteraction;
+        if (idle > IDLE_RESET_MS) {
+          resetting = true;
+        }
+      }
+      if (resetting) {
+        elevation = THREE.MathUtils.lerp(elevation, homeElevation, RESET_LERP_SPEED);
+        zoom = THREE.MathUtils.lerp(zoom, 1, RESET_LERP_SPEED);
+        // Once close enough, snap and resume auto-rotate
+        if (Math.abs(elevation - homeElevation) < 0.005 && Math.abs(zoom - 1) < 0.005) {
+          elevation = homeElevation;
+          zoom = 1;
+          autoRotate = true;
+          resetting = false;
+        }
+      }
+
       if (autoRotate) azimuth += AUTO_ROTATE_SPEED;
 
       const transition = transitionRef.current;

@@ -22,10 +22,7 @@ const POOL_WALL_COLOR = 0xb9bdba;
 // Same neutral grey as the building's own material — most set dressing stays
 // monochrome (minimalist look); only water/accent colors deviate.
 const MODEL_GREY = 0xe4e4e4;
-const ASPHALT_COLOR = 0x4d4d50;
 const STALL_LINE_COLOR = 0xececeb;
-const EV_ACCENT_COLOR = 0x3aa66b;
-const SPA_WATER_COLOR = 0x3f9c93;
 
 const PARK_STALL_COUNT = 3;
 
@@ -354,7 +351,7 @@ function buildEntranceCanopy(footprint: Footprint): THREE.Group {
   return group;
 }
 
-/** A small round raised-rim pod (mini jacuzzi), offset just outside the pool envelope. */
+/** A small round raised-rim hot tub, tucked snugly beside the pool envelope. */
 function buildSpaPod(
   footprint: Footprint,
   poolHalfWidth: number,
@@ -363,7 +360,8 @@ function buildSpaPod(
 ): THREE.Group {
   const group = new THREE.Group();
   const { halfWidth, halfDepth, baseY } = footprint;
-  const radius = Math.max(halfWidth, halfDepth) * 0.14;
+  const maxDim = Math.max(halfWidth, halfDepth);
+  const radius = maxDim * 0.11;
 
   const rimMaterial = new THREE.MeshStandardMaterial({
     color: POOL_WALL_COLOR,
@@ -371,28 +369,41 @@ function buildSpaPod(
     flatShading: true,
   });
   const waterMaterial = new THREE.MeshStandardMaterial({
-    color: SPA_WATER_COLOR,
+    color: POOL_WATER_COLOR,
     roughness: 0.15,
     metalness: 0.05,
   });
 
-  const rimHeight = radius * 0.4;
+  // Outer rim — open top so the water disc inside is visible from above
+  const rimHeight = radius * 0.45;
   const rim = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius * 1.05, rimHeight, 16),
+    new THREE.CylinderGeometry(radius, radius * 1.05, rimHeight, 16, 1, true),
     rimMaterial,
   );
   rim.position.y = baseY + rimHeight / 2;
   group.add(rim);
 
+  // Rim floor (bottom disc)
+  const rimBottom = new THREE.Mesh(
+    new THREE.CircleGeometry(radius * 1.05, 16),
+    rimMaterial,
+  );
+  rimBottom.rotation.x = -Math.PI / 2;
+  rimBottom.position.y = baseY;
+  group.add(rimBottom);
+
+  // Water surface — flat disc sitting near the top of the rim
   const water = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.82, radius * 0.82, rimHeight * 0.3, 16),
+    new THREE.CircleGeometry(radius * 0.78, 16),
     waterMaterial,
   );
-  water.position.y = baseY + rimHeight * 0.85;
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = baseY + rimHeight * 0.8;
   group.add(water);
 
-  const offsetX = poolHalfWidth + radius + Math.max(halfWidth, halfDepth) * 0.12;
-  group.position.set(offsetX, 0, poolCenterZ - poolHalfDepth * 0.3);
+  // Position: just outside the pool edge on +X
+  const offsetX = poolHalfWidth + radius * 1.3;
+  group.position.set(offsetX, 0, poolCenterZ);
 
   return group;
 }
@@ -413,18 +424,22 @@ function buildParkingLot(footprint: Footprint, layout: ParkingLotLayout): THREE.
   const centerX = (nearX + farX) / 2;
   const patchWidthX = Math.abs(farX - nearX);
 
+  // Concrete pad — no colour, same grey as the building
+  const concreteMaterial = new THREE.MeshStandardMaterial({
+    color: MODEL_GREY,
+    roughness: 0.92,
+    side: THREE.DoubleSide,
+  });
+
   const patch = new THREE.Mesh(
     new THREE.PlaneGeometry(patchWidthX, halfDepthZ * 2),
-    new THREE.MeshStandardMaterial({
-      color: ASPHALT_COLOR,
-      roughness: 0.95,
-      side: THREE.DoubleSide,
-    }),
+    concreteMaterial,
   );
   patch.rotation.x = Math.PI / 2;
   patch.position.set(centerX, baseY + groundLift, 0);
   group.add(patch);
 
+  // Stall dividing lines (white)
   const stallCount = 3;
   const stallPitch = (halfDepthZ * 2) / stallCount;
   const lineMaterial = new THREE.MeshStandardMaterial({
@@ -443,6 +458,27 @@ function buildParkingLot(footprint: Footprint, layout: ParkingLotLayout): THREE.
     group.add(line);
   }
 
+  // Curbs along the long edges of the lot
+  const curbMaterial = new THREE.MeshStandardMaterial({
+    color: POOL_WALL_COLOR,
+    roughness: 0.85,
+  });
+  const curbHeight = patchWidthX * 0.06;
+  const curbDepth = patchWidthX * 0.06;
+  for (const sign of [-1, 1]) {
+    const curb = new THREE.Mesh(
+      new THREE.BoxGeometry(curbDepth, curbHeight, halfDepthZ * 2),
+      curbMaterial,
+    );
+    curb.position.set(
+      centerX + (patchWidthX / 2) * sign,
+      baseY + curbHeight / 2,
+      0,
+    );
+    group.add(curb);
+  }
+
+  // Two parked cars in stalls 0 and 2
   const filledStalls = [0, 2];
   for (const idx of filledStalls) {
     const car = buildLowPolyCar("car", carLength);
@@ -461,7 +497,7 @@ interface EvChargerLayout {
   z: number;
 }
 
-/** A small charging post with an accent-colored head unit. */
+/** A small charging post — monochrome, no accent colour. */
 function buildEvCharger(footprint: Footprint, layout: EvChargerLayout): THREE.Group {
   const group = new THREE.Group();
   const { halfWidth, halfDepth, baseY } = footprint;
@@ -469,11 +505,6 @@ function buildEvCharger(footprint: Footprint, layout: EvChargerLayout): THREE.Gr
   const postMaterial = new THREE.MeshStandardMaterial({
     color: MODEL_GREY,
     roughness: 0.5,
-    flatShading: true,
-  });
-  const accentMaterial = new THREE.MeshStandardMaterial({
-    color: EV_ACCENT_COLOR,
-    roughness: 0.4,
     flatShading: true,
   });
 
@@ -488,7 +519,7 @@ function buildEvCharger(footprint: Footprint, layout: EvChargerLayout): THREE.Gr
 
   const head = new THREE.Mesh(
     new THREE.BoxGeometry(unit * 0.4, unit * 0.5, unit * 0.18),
-    accentMaterial,
+    postMaterial,
   );
   head.position.set(centerX, baseY + postH * 0.85, layout.z);
   group.add(head);
