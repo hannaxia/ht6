@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DiscussionPanel } from "../../components/sandbox/DiscussionPanel";
 import { MetricsPanel } from "../../components/sandbox/MetricsPanel";
 import { SandboxForm } from "../../components/sandbox/SandboxForm";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
@@ -297,6 +298,13 @@ export default function SandboxPage() {
               </p>
             )}
           </section>
+          <section>
+            <DiscussionPanel
+              hotelName={hotelLabel}
+              config={config}
+              metrics={metrics}
+            />
+          </section>
         </div>
 
         {/* Right column: seamless 3D building (transparent, no panel). Wider
@@ -311,8 +319,9 @@ export default function SandboxPage() {
         </div>
       </div>
       {/* Break out of the max-w-7xl main and re-align to the header's
-          max-w-6xl container so the button's right edge matches Log out. */}
-      <div className="-mx-6">
+          max-w-6xl container so the button's right edge matches Log out.
+          Positioned above the 3D scene, which overflows its cell downward. */}
+      <div className="relative z-10 -mx-6">
         <div className="mx-auto flex w-full max-w-6xl justify-end px-6">
           {isAuthenticated ? (
             <button

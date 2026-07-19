@@ -40,6 +40,16 @@ const MODERNITY_COLOR: [number, number] = [0xcfcfc9, 0xeeeeea];
 const FIRST_LOAD_DURATION_MS = 500;
 const SWAP_DURATION_MS = 650;
 
+// The building is framed to this reference box (the visible layout cell). The
+// render canvas is then enlarged past the cell to the bottom/right so ground
+// decor isn't cropped; the frustum is offset to keep the building's size and
+// position pinned to this reference framing (see updateCamera).
+const BASE_FOV = 45;
+// How far the render canvas extends past its layout box, as a fraction, on the
+// right and bottom. The extra area spills over the page margins on purpose.
+const SCENE_EXTEND_RIGHT = 0.38;
+const SCENE_EXTEND_BOTTOM = 0.34;
+
 // Camera orbit: free drag in any direction orbits azimuth/elevation around
 // the static scene; wheel zooms. Elevation is clamped so the camera can
 // never dip below the floor or flip past straight-down/up; zoom is clamped
@@ -186,8 +196,10 @@ function disposeEntry(entry: ModelEntry, allMaterials: Set<THREE.MeshStandardMat
  * selected hotel type; switching it dissolves (crossfades) between the old
  * and new model rather than a hard cut. Rooms smoothly scale the building
  * (mostly vertical); modernity restyles its material. The camera auto-fits
- * the *building's* bounding
- * sphere, interpolated across a transition, on load, and on every resize.
+ * the *building's* bounding sphere against a reference box (see
+ * updateCamera), interpolated across a transition, on load, and on every
+ * resize; the render canvas itself extends past that box so ground decor
+ * (pool, parking, shuttle) isn't cropped.
  */
 export function SandboxModel({
   hotelType,
@@ -281,7 +293,7 @@ export function SandboxModel({
     const height = el.clientHeight || rect.height || 400;
 
     const scene = new THREE.Scene(); // no background → transparent
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 5000);
+    const camera = new THREE.PerspectiveCamera(BASE_FOV, width / height, 0.1, 5000);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setClearColor(0x000000, 0);
@@ -298,6 +310,10 @@ export function SandboxModel({
     renderer.domElement.style.display = "block";
     renderer.domElement.style.cursor = "grab";
     renderer.domElement.style.touchAction = "none";
+    // The mount div disables pointer events (so the overflow area spilling
+    // past the layout cell doesn't steal clicks from UI below it) — the
+    // canvas re-enables them on itself so drag/wheel orbit still works.
+    renderer.domElement.style.pointerEvents = "auto";
 
     // Camera orbit state. Auto-rotates (azimuth) until the user clicks/drags,
     // then stops for good; free dragging in any direction thereafter orbits
@@ -379,10 +395,34 @@ export function SandboxModel({
     scene.add(pivot);
     pivotRef.current = pivot;
 
+    // Reference box (the visible layout cell = the mount's parent) vs. the
+    // actual, larger render canvas (the mount itself, extended past the cell
+    // by SCENE_EXTEND_RIGHT/BOTTOM). Cached here and refreshed on resize
+    // rather than read from the DOM every frame.
+    let refW = width;
+    let refH = height;
+    let renderW = width;
+    let renderH = height;
+    function measure() {
+      const parent = el.parentElement;
+      refW = parent?.clientWidth || el.clientWidth || 1;
+      refH = parent?.clientHeight || el.clientHeight || 1;
+      renderW = el.clientWidth || refW;
+      renderH = el.clientHeight || refH;
+    }
+    measure();
+
+    // Frame the model against the reference box, then render into the larger
+    // mount canvas without changing the building's size or on-screen
+    // position: distance/orbit/zoom are computed from the reference framing
+    // (unchanged from before), and the frustum is widened + offset to cover
+    // the extra render width/height so the added area simply reveals ground
+    // decor that used to be cropped, instead of shrinking the building.
     function updateCamera(radius: number) {
-      const fov = (camera.fov * Math.PI) / 180;
-      const fitH = radius / Math.sin(fov / 2);
-      const fitW = fitH / Math.min(1, camera.aspect);
+      const baseFov = (BASE_FOV * Math.PI) / 180;
+      const refAspect = refW / refH;
+      const fitH = radius / Math.sin(baseFov / 2);
+      const fitW = fitH / Math.min(1, refAspect);
       const distance = 1.25 * Math.max(fitH, fitW) * zoom;
       const dir = new THREE.Vector3(
         Math.cos(elevation) * Math.sin(azimuth),
@@ -393,6 +433,18 @@ export function SandboxModel({
       camera.near = distance / 100;
       camera.far = distance * 100;
       camera.lookAt(0, 0, 0);
+
+      const fovFull = 2 * Math.atan(Math.tan(baseFov / 2) * (renderH / refH));
+      camera.fov = (fovFull * 180) / Math.PI;
+      camera.aspect = renderW / renderH;
+      camera.setViewOffset(
+        renderW,
+        renderH,
+        (renderW - refW) / 2,
+        (renderH - refH) / 2,
+        renderW,
+        renderH,
+      );
       camera.updateProjectionMatrix();
     }
 
@@ -448,7 +500,7 @@ export function SandboxModel({
       const w = el.clientWidth || 1;
       const h = el.clientHeight || 1;
       renderer.setSize(w, h, false);
-      camera.aspect = w / h;
+      measure();
       updateCamera(currentRadius);
     }
     const resizeObserver = new ResizeObserver(resize);
@@ -579,5 +631,21 @@ export function SandboxModel({
     hasSpa,
   ]);
 
-  return <div ref={mountRef} className="h-full w-full" aria-hidden="true" />;
+  // Outer box is the reference framing (the layout cell). The inner mount is
+  // the actual render canvas, sized larger so it spills past the box to the
+  // bottom/right — decor that was cropped now renders into that overflow.
+  return (
+    <div className="relative h-full w-full">
+      <div
+        ref={mountRef}
+        className="absolute left-0 top-0 overflow-visible"
+        style={{
+          width: `${(1 + SCENE_EXTEND_RIGHT) * 100}%`,
+          height: `${(1 + SCENE_EXTEND_BOTTOM) * 100}%`,
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+      />
+    </div>
+  );
 }
