@@ -1,216 +1,155 @@
 # Innsight
 
-AI-powered hospitality digital twin and hotel investment simulator (ht6 2026).
-Explore real hotel markets on a map, simulate hotels you might build or
-renovate, and get AI consulting grounded in the same simulation engine.
+AI-powered hospitality digital twin and hotel investment simulator.
 
-**Every predicted metric (ADR, occupancy, revenue, rating, ROI, payback,
-opportunity score) is a simulation estimate — never real financial data.**
+Explore real hotel markets on a map, simulate hotels you might build or renovate, and get AI-driven insights grounded in ML predictions and a structured simulation engine.
+
+**Every predicted metric (ADR, occupancy, revenue, rating, ROI, payback, opportunity score) is a simulation estimate — never real financial data.**
+
+## Features
+
+- **Market Discovery** — Interactive city map with real hotel inventory (Stay22), competitor markers, and an opportunity heatmap showing where building a hotel makes the most sense.
+- **Hotel Sandbox** — Configure a hotel (type, rooms, stars, modernity, amenities, pricing) and watch predicted metrics update instantly: ADR, occupancy, rating, annual revenue, investment, ROI, and payback period. A 3D model reflects the hotel's character in real time.
+- **AI Discussion** — Two Gemini-powered agents (🙂 Guest and 👔 Revenue Manager) discuss the current hotel configuration on demand. The guest speaks from a comfort/value perspective; the manager references actual predicted metrics and closes with one actionable recommendation.
+- **AI Consultant** — Natural language interface powered by Gemini tool-calling. Ask "make this hotel compete with Marriott" and the consultant drives the simulation engine, explains tradeoffs, and applies changes.
+- **ML Predictions** — XGBoost models trained on real Airbnb and hotel review data predict ADR, occupancy, and guest rating. Falls back transparently to deterministic formulas when the ML service is unavailable.
+- **Saved Hotels** — Authenticated users can save, rename, and revisit hotel configurations.
 
 ## Repo layout
 
 ```
 innsight/
-├── web/               Next.js app (Market Discovery map, Hotel Sandbox, AI panel)
+├── web/               Next.js app (Market Discovery map, Hotel Sandbox, AI panels)
 ├── api/               Express service (simulation engine, Stay22 client, Gemini
-│                      orchestrator, MongoDB models)
+│                      orchestrator, AI agents, MongoDB models)
+├── ml/                Python ML layer (training scripts, FastAPI service, models)
 ├── packages/config/   @innsight/config — tunable lookup tables (amenity impact,
-│                      competition weighting, cost tables) with zod validation
-├── .env.example       The single env template — copy to .env at the repo root
-└── CLAUDE.md          Project brief / domain model source of truth
+│                      competition weighting, cost tables)
+└── .env.example       Single env template — copy to .env at the repo root
 ```
-
-Both apps read the **single root `.env`** — there are no per-package `.env`
-files to keep in sync.
 
 ## Quick start
 
-This is an **npm workspaces** monorepo — one `npm install` at the root wires
-up `web`, `api`, and `packages/config` together (via the root `workspaces`
-field in `package.json`), no other package manager needed. The ML layer
-(`ml/`) is a separate Python project using its own venv — see `ml/README.md`
-for training; `npm run dev` below only *runs* the already-trained models
-(`ml/models/*.pkl` must exist — run `ml/training/train_*.py` first if
-`ml/models/` is empty).
+Requires Node.js ≥ 20. This is an npm workspaces monorepo.
 
 ```bash
 # 1. Install all workspace dependencies
 npm install
 
-# 2. Create your env file (fill in keys later — the app boots without them)
+# 2. Create your env file (the app boots without keys in degraded mode)
 cp .env.example .env
 
-# 3. Run everything with one command
+# 3. Run everything
 npm run dev     # ML service :8000, API :4000, web :3000
 ```
 
-`npm run dev` runs all three in parallel in the same terminal (via
-`concurrently`, prefixed `[ml]`/`[api]`/`[web]`). Only run one `npm run dev`
-at a time — starting a second one while the first is still up will fail to
-bind the ports rather than replacing it. `Ctrl+C` stops all three. If the
-Python venv isn't set up yet (`.venv/` missing or `ml/models/` empty), the
-`[ml]` process will fail to start or return errors — the API detects this
-automatically and falls back to its deterministic formula engine (see
-"ML service integration" in `ml/README.md`), so a missing ML service never
-blocks the app, it just means ADR/occupancy/rating come from the built-in
-formulas instead of the trained models.
+`npm run dev` runs all three services in parallel via `concurrently`. `Ctrl+C` stops all of them.
 
-If you'd rather run them in separate terminals:
+To run services individually:
 
 ```bash
-npm run dev:ml           # Python ML service on http://localhost:8000
-npm run dev -w api       # Express API on http://localhost:4000
-npm run dev -w web       # Next.js on http://localhost:3000
+npm run dev:ml           # Python ML service on :8000
+npm run dev -w api       # Express API on :4000
+npm run dev -w web       # Next.js on :3000
 ```
 
-The stack **boots and runs with an empty `.env`** in degraded mode: the map
-shows a "not configured" placeholder, hotel lists are empty, simulations and
-the heatmap return `503 database_unavailable`, and the AI panel shows "Gemini
-not configured". `GET http://localhost:4000/health` reports each dependency as
-`ready`, `not_configured`, or `error`.
+The stack boots with an empty `.env` in degraded mode: the map shows a placeholder, simulations return `503`, and AI panels show "not configured". `GET http://localhost:4000/health` reports each dependency's status.
 
-Useful workspace commands:
+## Environment variables
 
-```bash
-npm run type-check     # TypeScript strict check across all workspaces
-npm run build           # Build all workspaces
-```
+All values go in the single root `.env`. See `.env.example` for the full template.
 
-## Setup checklist (work to be done outside this repo)
+| Variable | Required | Purpose |
+|---|---|---|
+| `STAY22_API_KEY` | For hotel data | Real hotel inventory, prices, ratings |
+| `GEMINI_API_KEY` | For AI features | AI Consultant, AI Discussion agents |
+| `GEMINI_MODEL` | No | Defaults to `gemini-flash-latest` |
+| `MONGODB_URI` | For persistence | Hotels, Locations, Simulations, Saved Hotels |
+| `MAPBOX_ACCESS_TOKEN` | For the map | Mapbox GL tiles |
+| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | For the map | Same token, exposed to the browser |
+| `AUTH0_DOMAIN` | For auth | Auth0 tenant |
+| `AUTH0_CLIENT_ID` | For auth | Auth0 app client ID |
+| `AUTH0_CLIENT_SECRET` | For auth | Auth0 app secret |
+| `AUTH0_SECRET` | For auth | Session cookie encryption (`openssl rand -hex 32`) |
+| `APP_BASE_URL` | For auth | Public web origin (default `http://localhost:3000`) |
+| `ML_SERVICE_URL` | No | Python ML service URL (default `http://localhost:8000`) |
+| `PORT` | No | API port (default `4000`) |
+| `LOG_LEVEL` | No | pino log level (default `info`) |
+| `FRONTEND_ORIGIN` | No | CORS allowlist (default `http://localhost:3000`) |
+| `NEXT_PUBLIC_BACKEND_URL` | No | API base URL for the frontend (default `http://localhost:4000`) |
 
-These five steps happen on external platforms and cannot be automated from
-this codebase. After each one, paste the value into the root `.env` and
-restart the dev processes.
+## Setup checklist
 
 ### Stay22
 
-Stay22 is the sole source of real hotel market data. Without it the map has
-no hotels and competitor analysis is empty. **The scaffold never fabricates
-hotel data as a substitute.**
+1. Request API access at [stay22.com](https://stay22.com) (manual approval).
+2. Copy the key to `STAY22_API_KEY`.
+3. Run `npm run scrape:hotels -w api` to populate the Hotels collection.
 
-1. Request API access via the Stay22 partner portal (https://stay22.com) —
-   this is a manual approval process, not self-serve; do it early.
-2. Once approved, copy the issued key into `STAY22_API_KEY` in `.env`.
-3. The scaffold consumes hotel search by city, bounding box, and radius
-   (see `api/src/stay22/client.ts`).
-4. **Important:** `api/src/stay22/schemas.ts` and the base URL in
-   `api/src/stay22/client.ts` encode an assumed response shape — confirm both
-   against the API docs Stay22 gives you with access, and adjust in those two
-   files (they are the only places the wire format lives). Every response is
-   zod-validated; malformed records are logged and discarded, never passed on.
+### Gemini
 
-### Gemini (Google AI Studio)
-
-1. Sign in at https://aistudio.google.com.
-2. Click **Get API key** → create key in a new project.
-3. Copy it into `GEMINI_API_KEY` in `.env`.
-4. Default model is `gemini-flash-latest` (Google's rolling alias for their current
-   stable flash model — override with `GEMINI_MODEL` for a specific pinned version,
-   e.g. `gemini-2.5-pro` for more capability at higher latency/cost).
+1. Get an API key at [aistudio.google.com](https://aistudio.google.com).
+2. Copy to `GEMINI_API_KEY`. Optionally set `GEMINI_MODEL` (e.g. `gemini-2.5-flash`).
 
 ### Mapbox
 
-1. Create an account at https://mapbox.com.
-2. Go to **Access tokens** → create a token with scopes `styles:read`,
-   `fonts:read`, `datasets:read`.
-3. Restrict the token's URLs to `http://localhost:3000/*` (add production
-   domains later). The token is visible in the browser — the URL restriction
-   is what protects it.
-4. Copy it into both `MAPBOX_ACCESS_TOKEN` and
-   `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` in `.env`.
+1. Create a token at [mapbox.com](https://mapbox.com) with `styles:read`, `fonts:read`, `datasets:read`.
+2. Copy to both `MAPBOX_ACCESS_TOKEN` and `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`.
 
 ### MongoDB Atlas
 
-1. Sign up at https://mongodb.com/atlas and create a **free-tier M0 cluster**.
-2. **Database Access** → add a database user with `readWrite` on the
-   `innsight` database.
-3. **Network Access** → add your current IP (or `0.0.0.0/0` for the
-   hackathon).
-4. **Connect → Drivers** → copy the connection string, substitute your
-   password, append the db name (e.g. `...mongodb.net/innsight`), and paste
-   into `MONGODB_URI` in `.env`.
+1. Create a free-tier cluster at [mongodb.com/atlas](https://mongodb.com/atlas).
+2. Add a `readWrite` user on the `innsight` database.
+3. Copy the connection string (with db name appended) to `MONGODB_URI`.
+4. Seed location data: `npm run seed:locations -w api`.
 
 ### Auth0
 
-1. In the Auth0 Dashboard, create a **Regular Web Application**.
-2. Set **Allowed Callback URLs** to `http://localhost:3000/auth/callback` and
-   **Allowed Logout URLs** to `http://localhost:3000`.
-3. Copy the domain, client ID, and client secret into the matching `AUTH0_*`
-   values in the root `.env`.
-4. Run `openssl rand -hex 32` and copy the result into `AUTH0_SECRET`.
-5. Keep `APP_BASE_URL=http://localhost:3000` for local development, then add
-   the corresponding callback/logout URLs when deploying to another domain.
+1. Create a Regular Web Application in the Auth0 Dashboard.
+2. Set callback URL to `http://localhost:3000/auth/callback`, logout URL to `http://localhost:3000`.
+3. Copy domain, client ID, and client secret to the `AUTH0_*` variables.
+4. Generate `AUTH0_SECRET` with `openssl rand -hex 32`.
 
-When these values are empty, the app remains usable in degraded mode and the
-header displays “Login not configured.” Once configured, Auth0 serves login,
-logout, and callback handling under `/auth/*`.
+### ML service (optional)
 
-### Remaining work after keys are in
+```bash
+# Create and activate a Python venv, then:
+pip install -r ml/training/requirements.txt
 
-- **Seed the `Locations` collection for Toronto.** The opportunity heatmap
-  reads per-area scores (tourism/business/transit/density) from the
-  `Locations` collection. Cells with no nearby Location doc fall back to
-  neutral scores, so the heatmap is flat until real location data is loaded.
-  Run `pnpm --filter @innsight/api seed:locations` (see
-  `api/src/scripts/seedLocations.ts`).
-- **Scrape hotel markers into the `Hotels` collection.** The Market
-  Discovery map reads hotel markers from MongoDB, not from Stay22 directly —
-  calling Stay22 live for every page load doesn't scale (a country-wide
-  bounding box also returns whichever properties rank highest overall
-  rather than spreading results geographically, and Stay22's standard tier
-  caps at 150 req/min). Run `pnpm --filter @innsight/api scrape:hotels` to
-  populate ~20 curated major Canadian cities plus 300+ Ontario towns/cities
-  (`api/src/scripts/scrapeCanadianHotels.ts` — the Ontario town list in
-  `api/src/scripts/ontarioTowns.ts` was generated from GeoNames' free
-  Canada gazetteer). Takes several minutes for the full run — the Stay22
-  client self-throttles to stay under the rate limit and retries on 429s.
-  Re-run periodically to refresh — it's a manual/scheduled job, not called
-  from request handlers.
-- **Confirm the Stay22 wire format** (see the Stay22 section above) and run a
-  real search to verify records flow through validation into the map.
-- **Tune the config tables.** Everything in `packages/config/src/` is marked
-  `placeholder — tune later`: amenity impacts, competition weights, cost
-  tables, operating margin, risk/opportunity weights.
+# Train models (outputs to ml/models/)
+cd ml/training
+python train_adr.py
+python train_occupancy.py
+cd satisfaction
+python train_rating_model.py
+```
 
-## Environment variables (root `.env`)
+The ML service starts automatically with `npm run dev`. If models aren't trained or the service is down, the API falls back to deterministic formulas.
 
-| Variable | Used by | Purpose |
-|---|---|---|
-| `STAY22_API_KEY` | api | Stay22 hotel market data |
-| `GEMINI_API_KEY` | api | AI consultant (Gemini) |
-| `GEMINI_MODEL` | api | Optional; defaults to `gemini-flash-latest` |
-| `MONGODB_URI` | api | MongoDB Atlas connection string |
-| `AUTH0_DOMAIN` | web | Auth0 tenant domain |
-| `AUTH0_CLIENT_ID` | web | Auth0 Regular Web Application client ID |
-| `AUTH0_CLIENT_SECRET` | web | Auth0 application client secret (server-only) |
-| `AUTH0_SECRET` | web | 64-character hex secret used to encrypt session cookies |
-| `APP_BASE_URL` | web | Public web origin used for Auth0 callbacks |
-| `PORT` | api | API port (default 4000) |
-| `LOG_LEVEL` | api | pino level (default `info`) |
-| `FRONTEND_ORIGIN` | api | CORS allowlist (default `http://localhost:3000`) |
-| `ML_SERVICE_URL` | api | Python ML service base URL (default `http://localhost:8000`). Optional — see `ml/README.md` |
-| `MAPBOX_ACCESS_TOKEN` / `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | web | Mapbox GL map tiles |
-| `NEXT_PUBLIC_BACKEND_URL` | web | API base URL (default `http://localhost:4000`) |
-| `NEXT_PUBLIC_DEBUG` | web | `true` enables verbose browser logging |
+## Useful commands
 
-## Architecture notes
+```bash
+npm run type-check     # TypeScript strict check across all workspaces
+npm run build          # Build all workspaces
+npm run dev            # Run ML + API + web concurrently
+```
 
-- **Validation everywhere:** every Stay22 response, every Gemini tool call and
-  final response, every simulation request body, and every simulation output
-  is zod-validated. Out-of-bounds simulation results are rejected server-side
-  (`simulation_output_invalid`), malformed external records are logged and
-  discarded.
-- **Logging:** the API uses structured `pino` logs (request completion entries
-  with method/path/status/duration, error entries with stacks, per-component
-  child loggers). The web app routes all diagnostics through `web/lib/log.ts`,
-  gated by `NEXT_PUBLIC_DEBUG`.
-- **Simulation domain model** (formulas, computation order, amenity capping,
-  segment-weighted competition): see `CLAUDE.md` — the engine in
-  `api/src/simulation/` implements it directly, with all tunable constants in
-  `packages/config/`.
-- **ML integration:** ADR, occupancy, and rating each try the trained model
-  (`ml/service/`, `api/src/ml/mlClient.ts`) first and fall back to the
-  deterministic formula on any failure — see `ml/README.md` "ML service
-  integration" for the fallback design and the documented approximations in
-  the HotelConfig → ML feature mapping. Revenue and CapEx/ROI/Payback are
-  always deterministic; there's no model or dataset for either.
+## Architecture
+
+- **Simulation engine** (`api/src/simulation/`) — Deterministic computation in strict dependency order. Config-driven lookup tables for amenity impacts, competition weights, and cost.
+- **ML layer** (`ml/`) — XGBoost regressors for ADR ($R^2 = 0.76$), occupancy, and guest rating. FastAPI service with automatic fallback.
+- **AI agents** (`api/src/ai/`) — Gemini-powered consultant (tool-calling), guest agent, and revenue manager agent. Each has a scoped system prompt ensuring it stays in character.
+- **Validation** — Zod schemas on every boundary: API requests, simulation outputs, Gemini responses, Stay22 data.
+- **Logging** — Structured pino logs (API) and gated browser logging (web, via `NEXT_PUBLIC_DEBUG`).
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js, React, TypeScript, Tailwind CSS, Mapbox GL, deck.gl, Three.js |
+| Backend | Express, TypeScript, Zod, Pino |
+| ML | Python, XGBoost, FastAPI, VADER (NLP sentiment) |
+| Database | MongoDB Atlas |
+| AI | Google Gemini (tool-calling + scoped agents) |
+| Auth | Auth0 |
+| Data | Stay22 API |
