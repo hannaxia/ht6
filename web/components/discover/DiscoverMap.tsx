@@ -17,13 +17,16 @@ import { HotelMarkerTooltip } from "./HotelMarkerTooltip";
 import { MapNotConfigured } from "./MapNotConfigured";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ?? "";
-// Initial wide framing; on load the camera flies into Toronto, where the
-// opportunity heatmap lives (the only market with seeded neighbourhood data).
-const ONTARIO_CENTER: [number, number] = [-84.5, 49.5];
-const ONTARIO_ZOOM = 4.4;
 // Matches api/src/cities.ts's toronto.bbox — where the camera lands on entry.
 // Frontend duplicates this locally since web/ and api/ are separate deployables.
 const TORONTO_BBOX = { north: 43.78, south: 43.58, east: -79.12, west: -79.64 };
+// The map loads centered on Toronto, where the opportunity heatmap lives
+// (the only market with seeded neighbourhood data) — no fly-in animation.
+const TORONTO_CENTER: [number, number] = [
+  (TORONTO_BBOX.east + TORONTO_BBOX.west) / 2,
+  (TORONTO_BBOX.north + TORONTO_BBOX.south) / 2,
+];
+const TORONTO_ZOOM = 10.5;
 
 // Red (low opportunity) → green (high). The score is a percentile (0-100),
 // so colorDomain below pins the mapping deterministically: 0 = full red,
@@ -221,8 +224,8 @@ export function DiscoverMap({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/light-v11",
-      center: ONTARIO_CENTER,
-      zoom: ONTARIO_ZOOM,
+      center: TORONTO_CENTER,
+      zoom: TORONTO_ZOOM,
     });
     const overlay = new MapboxOverlay({ layers: [] });
     map.addControl(overlay);
@@ -237,16 +240,15 @@ export function DiscoverMap({
 
     log.info("mapbox map initialized");
 
-    // Smoothly draw the eye from the wide Ontario view into the Toronto
-    // heatmap on first entry. No `essential: true` so prefers-reduced-motion
-    // users get an instant snap instead of a forced animation.
+    // Instantly snap to precisely frame the Toronto bbox (accounting for the
+    // actual container size/padding) — no animated camera movement.
     map.once("load", () => {
       map.fitBounds(
         [
           [TORONTO_BBOX.west, TORONTO_BBOX.south],
           [TORONTO_BBOX.east, TORONTO_BBOX.north],
         ],
-        { padding: 60, duration: 3000 },
+        { padding: { top: 60, right: 60, bottom: 60, left: 0 }, duration: 0 },
       );
     });
     return () => {
