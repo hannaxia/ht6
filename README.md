@@ -10,7 +10,7 @@ Explore real hotel markets on a map, simulate hotels you might build or renovate
 
 - **Market Discovery** — Interactive city map with real hotel inventory (Stay22), competitor markers, and an opportunity heatmap showing where building a hotel makes the most sense.
 - **Hotel Sandbox** — Configure a hotel (type, rooms, stars, modernity, amenities, pricing) and watch predicted metrics update instantly: ADR, occupancy, rating, annual revenue, investment, ROI, and payback period. A 3D model reflects the hotel's character in real time.
-- **AI Discussion** — Two Gemini-powered agents (🙂 Guest and 👔 Revenue Manager) discuss the current hotel configuration on demand. The guest speaks from a comfort/value perspective; the manager references actual predicted metrics and closes with one actionable recommendation.
+- **AI Discussion** — Two Gemini-powered agents discuss the current hotel configuration on demand. The guest speaks from a comfort/value perspective; the manager references actual predicted metrics and closes with one actionable recommendation.
 - **AI Consultant** — Natural language interface powered by Gemini tool-calling. Ask "make this hotel compete with Marriott" and the consultant drives the simulation engine, explains tradeoffs, and applies changes.
 - **ML Predictions** — XGBoost models trained on real Airbnb and hotel review data predict ADR, occupancy, and guest rating. Falls back transparently to deterministic formulas when the ML service is unavailable.
 - **Saved Hotels** — Authenticated users can save, rename, and revisit hotel configurations.
