@@ -113,7 +113,7 @@ export function CityScene() {
 
     const tower = new THREE.Group();
     const concrete = new THREE.MeshStandardMaterial({ color: 0xa9b0ad, roughness: 0.72 });
-    const towerGlass = new THREE.MeshStandardMaterial({ color: 0x607c7e, roughness: 0.22, metalness: 0.16 });
+    const towerGlass = new THREE.MeshStandardMaterial({ color: 0xbd3533, roughness: 0.22, metalness: 0.16 });
     const mastMaterial = new THREE.MeshStandardMaterial({ color: 0x939b98, roughness: 0.62 });
     const cylinderBetween = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
       const direction = new THREE.Vector3().subVectors(end, start);
