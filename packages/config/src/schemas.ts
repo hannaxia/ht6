@@ -41,6 +41,16 @@ const starCostsSchema = z.object({
   5: nonNegativeCost,
 });
 
+// Amenity install cost = base + perRoom × rooms. Lets a shared, roughly
+// fixed-size facility (a pool costs about the same to build for a 1-room
+// B&B as a 150-room hotel) coexist with genuinely per-room infrastructure
+// (wifi access points, parking spots) that should scale with room count —
+// see cost.ts for why a flat per-amenity number didn't work.
+export const amenityCostSchema = z.object({
+  base: nonNegativeCost,
+  perRoom: nonNegativeCost,
+});
+
 export const costTableSchema = z.object({
   perRoom: z.object(
     Object.fromEntries(HOTEL_TYPES.map((t) => [t, starCostsSchema])) as Record<
@@ -48,7 +58,7 @@ export const costTableSchema = z.object({
       typeof starCostsSchema
     >,
   ),
-  perAmenity: z.record(z.string(), nonNegativeCost),
+  perAmenity: z.record(z.string(), amenityCostSchema),
   renovationPerRoom: nonNegativeCost,
 });
 

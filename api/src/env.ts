@@ -6,6 +6,11 @@ const envSchema = z.object({
   SERPAPI_API_KEY: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
+  // The AI Discussion feature (4 sequential Gemini calls per request) is far
+  // more latency-sensitive than the tool-calling consultant, so it gets its
+  // own model override — defaults to gemini-2.5-flash in discussionService.ts
+  // regardless of what GEMINI_MODEL is set to for everything else.
+  GEMINI_DISCUSSION_MODEL: z.string().min(1).optional(),
   MONGODB_URI: z.string().min(1).optional(),
   PORT: z.coerce.number().int().positive().optional(),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).optional(),

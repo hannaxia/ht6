@@ -7,12 +7,16 @@ export const discussionMessageSchema = z.object({
   recommendation: z.string().optional(),
 });
 
-export const discussionResponseSchema = z.object({
-  messages: z.array(discussionMessageSchema),
-});
-
 export type DiscussionMessage = z.infer<typeof discussionMessageSchema>;
-export type DiscussionResponse = z.infer<typeof discussionResponseSchema>;
+
+/** The 4 independent discussion turns, in display order. */
+export const DISCUSSION_TURNS = [
+  "guest1",
+  "manager1",
+  "guest2",
+  "manager2",
+] as const;
+export type DiscussionTurnName = (typeof DISCUSSION_TURNS)[number];
 
 export interface DiscussionPredictions {
   adr: number;
@@ -35,19 +39,28 @@ export interface DiscussionRequest {
   predictions: DiscussionPredictions;
 }
 
+const turnResponseSchema = z.object({ message: discussionMessageSchema });
+
 /**
- * Kicks off the two-agent discussion for the current simulation snapshot.
- * Pass an AbortSignal so a fresh edit can cancel an in-flight discussion.
+ * Generates a single discussion turn. Each of the 4 turns is deliberately
+ * its own independent HTTP request rather than one request that generates
+ * all 4 — see api/src/ai/discussionService.ts's doc comment: a second
+ * sequential Gemini call made from inside an already-open Express response
+ * reproducibly hung, so the 4 turns are now fired as 4 separate requests
+ * (see DiscussionPanel.tsx, which runs them in parallel).
  */
-export const discussionApi = {
-  create(
-    payload: DiscussionRequest,
-    signal?: AbortSignal,
-  ): Promise<DiscussionResponse> {
-    return fetchJson(
-      "/agents/discussion",
-      { method: "POST", body: JSON.stringify(payload), signal },
-      discussionResponseSchema,
-    );
-  },
-};
+export function runDiscussionTurn(
+  turn: DiscussionTurnName,
+  payload: DiscussionRequest,
+  signal?: AbortSignal,
+): Promise<DiscussionMessage> {
+  return fetchJson(
+    "/agents/discussion",
+    {
+      method: "POST",
+      body: JSON.stringify({ ...payload, turn }),
+      signal,
+    },
+    turnResponseSchema,
+  ).then((res) => res.message);
+}

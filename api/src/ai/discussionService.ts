@@ -3,17 +3,20 @@ import type { Logger } from "pino";
 import type { Readiness } from "../db/mongo.js";
 import type { Env } from "../env.js";
 import {
-  discussionResponseSchema,
+  discussionMessageSchema,
   type DiscussionMessage,
   type DiscussionRequest,
-  type DiscussionResponse,
-  type DiscussionTurn,
+  type DiscussionTurnName,
 } from "../schemas/discussion.js";
-import { GUEST_SYSTEM_INSTRUCTION, runGuestTurn } from "./guestAgent.js";
+import {
+  GUEST_SYSTEM_INSTRUCTION,
+  runGuestFollowUp,
+  runGuestOpening,
+} from "./guestAgent.js";
 import {
   MANAGER_SYSTEM_INSTRUCTION,
-  runManagerFinalTurn,
-  runManagerTurn,
+  runManagerClosing,
+  runManagerOpening,
 } from "./managerAgent.js";
 
 export class DiscussionNotConfiguredError extends Error {
@@ -26,22 +29,29 @@ export class DiscussionNotConfiguredError extends Error {
 export interface DiscussionService {
   readonly readiness: Readiness;
   /**
-   * Orchestrates the fixed four-message exchange:
-   *   Guest → Manager → Guest → Manager (final recommendation).
+   * Generates exactly ONE of the 4 discussion messages (guest1, manager1,
+   * guest2, or manager2) — a single, self-contained Gemini call, no shared
+   * transcript with the other 3. The route (routes/agents.ts) is called 4
+   * times, once per turn, as 4 independent HTTP requests fired in parallel
+   * from the client — deliberately NOT chained within one request.
+   *
+   * Why: an earlier design generated all 4 turns inside one request/response
+   * (first sequentially with a real shared transcript, then — after removing
+   * that dependency — still sequentially with independent prompts). In both
+   * cases, the SECOND-OR-LATER Gemini call made from within an already-open
+   * Express response reproducibly never settled: not just slow, but stuck
+   * even past a hard client-side setTimeout independent of the SDK's own
+   * promise — while the exact same call made as the FIRST Gemini call of a
+   * fresh request always succeeded quickly. So each turn now gets its own
+   * fresh request, sidestepping whatever that was rather than continuing to
+   * chase it.
    */
-  discuss(
+  runTurn(
+    turn: DiscussionTurnName,
     request: DiscussionRequest,
     logger: Logger,
-    signal?: AbortSignal,
-  ): Promise<DiscussionResponse>;
+  ): Promise<DiscussionMessage>;
 }
-
-const GUEST_OPENING =
-  "React to this hotel and its recent changes as a guest would. Give your first impression.";
-const GUEST_FOLLOW_UP =
-  "Continue the conversation as the guest. Add one more thought or a remaining wish about the guest experience — don't repeat what you already said.";
-const MANAGER_OPENING =
-  "Respond to the guest as the revenue manager, tying their point to the projected financial impact of the changes.";
 
 export function createDiscussionService(
   env: Env,
@@ -59,7 +69,12 @@ export function createDiscussionService(
     );
   }
 
-  const modelName = env.GEMINI_MODEL ?? "gemini-flash-latest";
+  // Dedicated, independently-overridable model for this feature specifically
+  // — more latency-sensitive than the tool-calling consultant
+  // (env.GEMINI_MODEL), so it isn't tied to that setting. gemini-2.5-flash is
+  // a fast, current, explicitly-pinned model (not a "-latest" rolling alias)
+  // chosen for this conversational task.
+  const modelName = env.GEMINI_DISCUSSION_MODEL ?? "gemini-2.5-flash";
 
   function buildModels(): { guest: GenerativeModel; manager: GenerativeModel } {
     if (!genAI) throw new DiscussionNotConfiguredError();
@@ -80,65 +95,42 @@ export function createDiscussionService(
       return genAI ? "ready" : "not_configured";
     },
 
-    async discuss(request, requestLogger, signal): Promise<DiscussionResponse> {
+    async runTurn(turn, request, requestLogger): Promise<DiscussionMessage> {
       if (!genAI) throw new DiscussionNotConfiguredError();
-      const turnLog = requestLogger.child({ component: "discussion-service" });
+      const turnLog = requestLogger.child({ component: "discussion-service", turn });
       const { guest, manager } = buildModels();
-      const transcript: DiscussionTurn[] = [];
 
-      const ensureLive = () => {
-        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-      };
+      let message: DiscussionMessage;
+      switch (turn) {
+        case "guest1":
+          message = { speaker: "guest", text: await runGuestOpening(guest, request) };
+          break;
+        case "manager1":
+          message = { speaker: "manager", text: await runManagerOpening(manager, request) };
+          break;
+        case "guest2":
+          message = { speaker: "guest", text: await runGuestFollowUp(guest, request) };
+          break;
+        case "manager2": {
+          const closing = await runManagerClosing(manager, request);
+          message = {
+            speaker: "manager",
+            text: closing.text,
+            recommendation: closing.recommendation,
+          };
+          break;
+        }
+      }
 
-      // 1. Guest — opening impression.
-      ensureLive();
-      const guest1 = await runGuestTurn(guest, request, transcript, GUEST_OPENING);
-      transcript.push({ speaker: "guest", text: guest1 });
-
-      // 2. Manager — financial response to the guest.
-      ensureLive();
-      const manager1 = await runManagerTurn(
-        manager,
-        request,
-        transcript,
-        MANAGER_OPENING,
-      );
-      transcript.push({ speaker: "manager", text: manager1 });
-
-      // 3. Guest — one more thought.
-      ensureLive();
-      const guest2 = await runGuestTurn(
-        guest,
-        request,
-        transcript,
-        GUEST_FOLLOW_UP,
-      );
-      transcript.push({ speaker: "guest", text: guest2 });
-
-      // 4. Manager — closing analysis + single actionable recommendation.
-      ensureLive();
-      const final = await runManagerFinalTurn(manager, request, transcript);
-
-      const messages: DiscussionMessage[] = [
-        { speaker: "guest", text: guest1 },
-        { speaker: "manager", text: manager1 },
-        { speaker: "guest", text: guest2 },
-        {
-          speaker: "manager",
-          text: final.text,
-          recommendation: final.recommendation,
-        },
-      ];
-
-      const parsed = discussionResponseSchema.safeParse({ messages });
+      const parsed = discussionMessageSchema.safeParse(message);
       if (!parsed.success) {
         turnLog.error(
           { issues: parsed.error.issues },
-          "discussion response failed schema validation",
+          "discussion message failed schema validation",
         );
-        throw new Error("discussion response failed validation");
+        throw new Error("discussion message failed validation");
       }
-      turnLog.info("AI discussion completed");
+      turnLog.info("discussion turn completed");
       return parsed.data;
     },
   };

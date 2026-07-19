@@ -1,6 +1,5 @@
 import type { GenerativeModel } from "@google/generative-ai";
-import type { DiscussionRequest, DiscussionTurn } from "../schemas/discussion.js";
-import { formatTranscript } from "./discussionShared.js";
+import type { DiscussionRequest } from "../schemas/discussion.js";
 
 /**
  * Guest Experience Agent — speaks purely from a realistic guest's point of
@@ -27,21 +26,47 @@ export function buildGuestContext(state: DiscussionRequest): string {
   });
 }
 
-export async function runGuestTurn(
+/**
+ * Two independent guest turns (no shared transcript — each is a self-
+ * contained prompt reacting to the same hotel snapshot from a different
+ * angle). The UI splices guest1/manager1/guest2/manager2 together in order
+ * so it *reads* like a back-and-forth conversation, but none of the 4 calls
+ * actually depends on another's output — deliberately, since a Gemini call
+ * chained onto a prior turn's real text is what caused a reproducible hang
+ * on the second+ sequential call in this request path (see
+ * discussionService.ts). Each is a fixed, independent prompt instead.
+ */
+async function runGuestTurn(
   model: GenerativeModel,
   state: DiscussionRequest,
-  transcript: DiscussionTurn[],
-  turnInstruction: string,
+  instruction: string,
 ): Promise<string> {
-  const prompt =
-    `Hotel details (JSON):\n${buildGuestContext(state)}\n\n` +
-    (transcript.length > 0
-      ? `Conversation so far:\n${formatTranscript(transcript)}\n\n`
-      : "") +
-    turnInstruction;
-
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-  });
+  const prompt = `Hotel details (JSON):\n${buildGuestContext(state)}\n\n${instruction}`;
+  const result = await model.generateContent(
+    { contents: [{ role: "user", parts: [{ text: prompt }] }] },
+    { timeout: 10_000 },
+  );
   return result.response.text().trim();
+}
+
+export function runGuestOpening(
+  model: GenerativeModel,
+  state: DiscussionRequest,
+): Promise<string> {
+  return runGuestTurn(
+    model,
+    state,
+    "React to this hotel and its recent changes as a guest would. Give your honest first impression.",
+  );
+}
+
+export function runGuestFollowUp(
+  model: GenerativeModel,
+  state: DiscussionRequest,
+): Promise<string> {
+  return runGuestTurn(
+    model,
+    state,
+    "As a guest, share one more specific thought about this hotel — something you'd still want, or a detail (comfort, amenities, value) worth calling out. Give a fresh angle, not a generic restatement.",
+  );
 }

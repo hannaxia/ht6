@@ -30,21 +30,27 @@ export const discussionRequestSchema = z.object({
 export const discussionMessageSchema = z.object({
   speaker: z.enum(["guest", "manager"]),
   text: z.string().min(1),
-  /** Only present on the final manager message. */
+  /** Only present on the manager's message. */
   recommendation: z.string().min(1).optional(),
 });
 
-export const discussionResponseSchema = z.object({
-  messages: z.array(discussionMessageSchema).length(4),
+/**
+ * One of the 4 independent discussion turns. The client requests each as
+ * its own HTTP request (see discussionService.ts for why they're no longer
+ * generated inside a single request).
+ */
+export const discussionTurnNameSchema = z.enum([
+  "guest1",
+  "manager1",
+  "guest2",
+  "manager2",
+]);
+
+export const discussionTurnRequestSchema = discussionRequestSchema.extend({
+  turn: discussionTurnNameSchema,
 });
 
 export type DiscussionPredictions = z.infer<typeof discussionPredictionsSchema>;
 export type DiscussionRequest = z.infer<typeof discussionRequestSchema>;
 export type DiscussionMessage = z.infer<typeof discussionMessageSchema>;
-export type DiscussionResponse = z.infer<typeof discussionResponseSchema>;
-
-/** One turn in the running transcript passed between agents. */
-export interface DiscussionTurn {
-  speaker: "guest" | "manager";
-  text: string;
-}
+export type DiscussionTurnName = z.infer<typeof discussionTurnNameSchema>;

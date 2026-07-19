@@ -2,11 +2,21 @@ import type { CostTable } from "@innsight/config";
 import { SimulationError } from "./errors.js";
 import type { HotelConfig, InvestmentMode } from "./types.js";
 
-function amenityInstallCost(amenities: string[], costTable: CostTable): number {
-  return amenities.reduce(
-    (sum, amenity) => sum + (costTable.perAmenity[amenity] ?? 0),
-    0,
-  );
+// base + perRoom × rooms per amenity — a 1-room listing and a 500-room hotel
+// installing the same amenity (e.g. wifi) get very different costs, rather
+// than the old flat per-amenity number that priced them identically. `rooms`
+// is the hotel's current/final room count (the amenity has to serve however
+// many rooms the hotel actually has now).
+function amenityInstallCost(
+  amenities: string[],
+  costTable: CostTable,
+  rooms: number,
+): number {
+  return amenities.reduce((sum, amenity) => {
+    const cost = costTable.perAmenity[amenity];
+    if (!cost) return sum;
+    return sum + cost.base + cost.perRoom * rooms;
+  }, 0);
 }
 
 /**
@@ -30,7 +40,7 @@ export function investmentFormula(
 ): number {
   const mode = options?.mode ?? "new_build";
   const perRoom = costTable.perRoom[input.hotelType][input.stars];
-  const amenityCost = amenityInstallCost(input.amenities, costTable);
+  const amenityCost = amenityInstallCost(input.amenities, costTable, input.rooms);
   let total =
     perRoom * input.rooms +
     amenityCost +
@@ -46,7 +56,11 @@ export function investmentFormula(
 
     const baseAmenities = new Set(base.amenities);
     const addedAmenities = input.amenities.filter((a) => !baseAmenities.has(a));
-    const amenityUpgradeCost = amenityInstallCost(addedAmenities, costTable);
+    const amenityUpgradeCost = amenityInstallCost(
+      addedAmenities,
+      costTable,
+      input.rooms,
+    );
 
     const renovationDeltaIncrease = Math.max(
       0,
@@ -66,20 +80,23 @@ export function investmentFormula(
 }
 
 export function roi(profit: number, investment: number): number {
-  // 0/0 identity: nothing built, nothing spent (rooms=0, no amenities).
-  if (investment === 0 && profit === 0) return 0;
-  if (investment <= 0) {
-    throw new SimulationError("investment_non_positive", { investment });
-  }
+  // No capital deployed — either nothing built (new_build with rooms=0, no
+  // amenities) or, in "upgrade" mode, no changes made yet (an existing
+  // hotel's config still exactly matches its startingConfig, e.g. right
+  // after loading it into the sandbox before any edit). Either way there's
+  // no investment to compute a return on, so ROI is reported as 0 rather
+  // than thrown — a real positive profit with $0 incremental investment
+  // isn't a formula bug, it's the expected "haven't changed anything yet"
+  // state, and shouldn't crash the whole simulation.
+  if (investment <= 0) return 0;
   if (profit === 0) return 0;
   return profit / investment;
 }
 
 export function payback(profit: number, investment: number): number {
-  if (investment === 0 && profit === 0) return Number.POSITIVE_INFINITY;
-  if (investment <= 0) {
-    throw new SimulationError("investment_non_positive", { investment });
-  }
+  // See roi()'s comment — $0 invested has no payback period; infinite reads
+  // correctly in the UI (already rendered as "∞").
+  if (investment <= 0) return Number.POSITIVE_INFINITY;
   if (profit === 0) return Number.POSITIVE_INFINITY;
   return investment / profit;
 }

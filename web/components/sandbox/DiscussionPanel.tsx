@@ -3,15 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError } from "../../lib/api/client";
 import {
-  discussionApi,
+  DISCUSSION_TURNS,
+  runDiscussionTurn,
   type DiscussionMessage,
 } from "../../lib/api/discussion";
 import type { HotelConfigPayload, SimulateHotelOutput } from "../../lib/api/schemas";
 import { log } from "../../lib/log";
 import { EstimateLabel } from "../shared/EstimateLabel";
 import { buildDiscussionRequest } from "./discussionSnapshot";
-
-const REVEAL_STAGGER_MS = 700;
 
 type Status =
   | "idle"
@@ -22,8 +21,16 @@ type Status =
 
 const SPEAKERS = {
   guest: { avatar: "🙂", label: "Guest" },
-  manager: { avatar: "👔", label: "Revenue Manager" },
+  manager: { avatar: "👔", label: "Manager" },
 } as const;
+
+// Fixed slots matching DISCUSSION_TURNS' order (guest1, manager1, guest2,
+// manager2) — each of the 4 is its own independent HTTP request fired in
+// parallel, so they can resolve in any order; keeping them in fixed
+// positions means the display always reads guest → manager → guest →
+// manager regardless of which one actually finished first.
+type Slots = (DiscussionMessage | null)[];
+const EMPTY_SLOTS: Slots = DISCUSSION_TURNS.map(() => null);
 
 export function DiscussionPanel({
   hotelName,
@@ -35,12 +42,10 @@ export function DiscussionPanel({
   metrics: SimulateHotelOutput | null;
 }) {
   const [status, setStatus] = useState<Status>("idle");
-  const [messages, setMessages] = useState<DiscussionMessage[]>([]);
-  const [visibleCount, setVisibleCount] = useState(0);
+  const [slots, setSlots] = useState<Slots>(EMPTY_SLOTS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
-  const revealTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Baseline for computing deltas / recent changes: the config + metrics the
   // agents last discussed. Deltas therefore describe everything that changed
@@ -48,26 +53,11 @@ export function DiscussionPanel({
   const prevConfigRef = useRef<HotelConfigPayload | null>(null);
   const prevMetricsRef = useRef<SimulateHotelOutput | null>(null);
 
-  function clearRevealTimers() {
-    for (const t of revealTimersRef.current) clearTimeout(t);
-    revealTimersRef.current = [];
-  }
-
-  function revealMessages(count: number) {
-    clearRevealTimers();
-    setVisibleCount(0);
-    for (let i = 0; i < count; i++) {
-      const t = setTimeout(() => setVisibleCount(i + 1), i * REVEAL_STAGGER_MS);
-      revealTimersRef.current.push(t);
-    }
-  }
-
   async function callAgents() {
     if (!config || !metrics) return;
 
     // A previous call still running? Cancel it and start fresh.
     abortRef.current?.abort();
-    clearRevealTimers();
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -81,26 +71,51 @@ export function DiscussionPanel({
 
     setStatus("generating");
     setErrorMessage(null);
-    setMessages([]);
-    setVisibleCount(0);
+    setSlots(EMPTY_SLOTS);
 
-    try {
-      const res = await discussionApi.create(request, controller.signal);
-      if (controller.signal.aborted) return;
+    let notConfigured = false;
+    let anyFailed = false;
+    let anySucceeded = false;
+
+    // Fired together as 4 independent requests (not chained) — each fills
+    // its own fixed slot the moment it resolves, so whichever finishes
+    // first appears first without disturbing display order.
+    const turnPromises = DISCUSSION_TURNS.map((turn, index) =>
+      runDiscussionTurn(turn, request, controller.signal)
+        .then((message) => {
+          if (controller.signal.aborted) return;
+          anySucceeded = true;
+          setSlots((prev) => {
+            const next = [...prev];
+            next[index] = message;
+            return next;
+          });
+        })
+        .catch((err) => {
+          if (controller.signal.aborted) return;
+          if (err instanceof ApiError && err.errorCode === "ai_not_configured") {
+            notConfigured = true;
+          } else {
+            anyFailed = true;
+            log.warn("discussion turn failed", turn, err);
+          }
+        }),
+    );
+
+    await Promise.all(turnPromises);
+    if (controller.signal.aborted) return;
+
+    if (notConfigured && !anySucceeded) {
+      setStatus("not_configured");
+    } else if (!anySucceeded) {
+      setStatus("error");
+      setErrorMessage("The AI discussion could not be generated.");
+    } else {
+      // At least one turn came through — show it even if others failed.
       prevConfigRef.current = config;
       prevMetricsRef.current = metrics;
-      setMessages(res.messages);
       setStatus("ready");
-      revealMessages(res.messages.length);
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      if (err instanceof ApiError && err.errorCode === "ai_not_configured") {
-        setStatus("not_configured");
-      } else {
-        setStatus("error");
-        setErrorMessage("The AI discussion could not be generated.");
-        log.warn("discussion request failed", err);
-      }
+      if (anyFailed) log.warn("discussion partially failed; showing what succeeded");
     }
   }
 
@@ -108,12 +123,12 @@ export function DiscussionPanel({
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
-      clearRevealTimers();
     };
   }, []);
 
   const busy = status === "generating";
   const canCall = Boolean(config && metrics) && !busy;
+  const messages = slots.filter((m): m is DiscussionMessage => m !== null);
 
   return (
     <div className="rounded border border-slate-200 bg-white p-4">
@@ -142,24 +157,25 @@ export function DiscussionPanel({
       {status === "idle" ? (
         <p className="text-sm text-slate-500">
           Configure the hotel, then call the agents to hear a guest and a
-          revenue manager weigh in on the current setup.
+          manager weigh in on the current setup.
         </p>
       ) : null}
 
-      {status === "generating" ? (
+      {busy && messages.length === 0 ? (
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <span className="inline-flex gap-1">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
           </span>
-          Guest and revenue manager are talking it through…
+          Guest and manager are talking it through…
         </div>
       ) : null}
 
-      {status === "ready" ? (
+      {messages.length > 0 ? (
         <div className="space-y-3">
-          {messages.slice(0, visibleCount).map((m, i) => {
+          {slots.map((m, i) => {
+            if (!m) return null;
             const speaker = SPEAKERS[m.speaker];
             return (
               <div key={i} className="flex animate-fade-in-up gap-2">
@@ -183,9 +199,15 @@ export function DiscussionPanel({
               </div>
             );
           })}
-          {visibleCount >= messages.length && messages.length > 0 ? (
-            <EstimateLabel />
+          {/* More turns still in flight. */}
+          {busy ? (
+            <div className="flex items-center gap-1 pl-7 text-slate-400">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300" />
+            </div>
           ) : null}
+          {status === "ready" ? <EstimateLabel /> : null}
         </div>
       ) : null}
     </div>
