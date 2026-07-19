@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import { loadConfig } from "@innsight/config";
 import { createAIConsultant } from "./ai/consultant.js";
+import { createDiscussionService } from "./ai/discussionService.js";
 import { createGeminiClient } from "./ai/gemini.js";
 import { TOOLS } from "./ai/tools/index.js";
 import { createApp } from "./app.js";
@@ -35,8 +36,18 @@ async function main(): Promise<void> {
     mongo,
     stay22,
   });
+  const discussion = createDiscussionService(env, logger);
 
-  const app = createApp({ env, logger, mongo, stay22, simulation, ai, mlClient });
+  const app = createApp({
+    env,
+    logger,
+    mongo,
+    stay22,
+    simulation,
+    ai,
+    discussion,
+    mlClient,
+  });
   const port = env.PORT ?? 4000;
   app.listen(port, () => {
     logger.info({ port }, "innsight api listening");

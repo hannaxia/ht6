@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DiscussionPanel } from "../../components/sandbox/DiscussionPanel";
 import { MetricsPanel } from "../../components/sandbox/MetricsPanel";
 import { SandboxForm } from "../../components/sandbox/SandboxForm";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
@@ -296,6 +297,13 @@ export default function SandboxPage() {
                 — see README → Setup checklist)
               </p>
             )}
+          </section>
+          <section>
+            <DiscussionPanel
+              hotelName={hotelLabel}
+              config={config}
+              metrics={metrics}
+            />
           </section>
         </div>
 
