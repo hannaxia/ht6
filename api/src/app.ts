@@ -1,6 +1,7 @@
 import express from "express";
 import type { Logger } from "pino";
 import type { AIConsultant } from "./ai/consultant.js";
+import type { DiscussionService } from "./ai/discussionService.js";
 import type { MongoConnection } from "./db/mongo.js";
 import type { Env } from "./env.js";
 import type { MLClient } from "./ml/mlClient.js";
@@ -11,6 +12,7 @@ import {
 } from "./middleware/errorHandler.js";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { requestLoggerMiddleware } from "./middleware/requestLogger.js";
+import { agentsRouter } from "./routes/agents.js";
 import { aiRouter } from "./routes/ai.js";
 import { healthRouter } from "./routes/health.js";
 import { hotelsRouter } from "./routes/hotels.js";
@@ -27,6 +29,7 @@ export interface AppDependencies {
   stay22: Stay22Client;
   simulation: SimulationEngine;
   ai: AIConsultant;
+  discussion: DiscussionService;
   mlClient: MLClient;
 }
 
@@ -42,6 +45,7 @@ export function createApp(deps: AppDependencies): express.Express {
   app.use("/simulations", simulationsRouter(deps));
   app.use("/saved-hotels", savedHotelsRouter(deps));
   app.use("/ai", aiRouter(deps));
+  app.use("/agents", agentsRouter(deps));
   app.use(notFoundHandler);
   app.use(errorHandlerMiddleware(deps.logger));
   return app;

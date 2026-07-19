@@ -16,25 +16,34 @@ export function MetricsPanel({ metrics }: { metrics: SimulateHotelOutput }) {
   }
   const payback =
     metrics.paybackYears === null || !Number.isFinite(metrics.paybackYears)
-      ? "∞"
+      ? "Never"
       : `${metrics.paybackYears.toFixed(1)} yrs`;
   return (
     <div>
       <div className="grid grid-cols-2 gap-3">
-        <MetricCard label="ADR / night" value={cad(metrics.adr)} />
+        <MetricCard
+          label="ADR (Average Daily Rate) / Night"
+          value={cad(metrics.adr)}
+        />
         <MetricCard
           label="Occupancy"
           value={`${metrics.occupancy.toFixed(0)}%`}
         />
-        <MetricCard label="Annual revenue" value={cad(metrics.revenue)} />
-        <MetricCard label="Guest rating" value={metrics.rating.toFixed(1)} />
-        <MetricCard label="Investment" value={cad(metrics.investment)} />
+        <MetricCard label="Annual Revenue" value={cad(metrics.revenue)} />
         <MetricCard
-          label="Operating profit / yr"
+          label="Guest Rating"
+          value={`${metrics.rating.toFixed(1)} / 5`}
+        />
+        <MetricCard label="Initial Investment" value={cad(metrics.investment)} />
+        <MetricCard
+          label="Annual Operating Profit"
           value={cad(metrics.annualOperatingProfit)}
         />
-        <MetricCard label="ROI" value={`${(metrics.roi * 100).toFixed(1)}%`} />
-        <MetricCard label="Payback" value={payback} />
+        <MetricCard
+          label="ROI (Return on Investment)"
+          value={`${(metrics.roi * 100).toFixed(1)}%`}
+        />
+        <MetricCard label="Time to Break Even" value={payback} />
       </div>
       <p className="mt-3 text-xs text-slate-500">
         {metrics.disclaimer ??

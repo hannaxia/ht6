@@ -15,6 +15,25 @@ const HOTEL_TYPES = [
 
 export { AMENITIES };
 
+function titleCase(s: string) {
+  return s
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+const AMENITY_WORD_OVERRIDES: Record<string, string> = {
+  ev: "EV",
+  wifi: "WiFi",
+};
+
+function formatAmenity(amenity: string) {
+  return amenity
+    .split("_")
+    .map((w) => AMENITY_WORD_OVERRIDES[w] ?? w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export function SandboxForm({
   config,
   onChange,
@@ -55,7 +74,7 @@ export function SandboxForm({
           >
             {HOTEL_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t.replace("_", " ")}
+                {titleCase(t)}
               </option>
             ))}
           </select>
@@ -71,7 +90,7 @@ export function SandboxForm({
             className="w-full accent-accent"
           />
         </FormField>
-        <FormField label={`Stars: ${config.stars}`}>
+        <FormField label={`Stars Rating: ${config.stars}`}>
           <input
             type="range"
             min={1}
@@ -113,7 +132,7 @@ export function SandboxForm({
                 onChange={() => toggleAmenity(amenity)}
                 className="accent-accent"
               />
-              {amenity.replace(/_/g, " ")}
+              {formatAmenity(amenity)}
             </label>
           ))}
         </div>
