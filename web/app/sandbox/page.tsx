@@ -287,7 +287,7 @@ export default function SandboxPage() {
           </section>
           <section>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">
-              Estimated metrics
+              Estimated Metrics
             </h2>
             {metrics ? (
               <MetricsPanel metrics={metrics} />
