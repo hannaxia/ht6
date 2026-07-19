@@ -12,6 +12,26 @@ export function CityScene() {
   const mountRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Easter egg: clicking the CN tower toggles a sound. Created lazily so the
+  // audio element only exists once the user actually triggers it (and stays
+  // within the click's user-gesture, satisfying autoplay policies). Clicking
+  // again pauses; clicking once more resumes from where it left off.
+  const toggleEasterEgg = () => {
+    if (!audioRef.current) {
+      // Filename has a space, so encode it for the public URL.
+      audioRef.current = new Audio(encodeURI("/easter egg.mp3"));
+    }
+    const audio = audioRef.current;
+    if (audio.paused) {
+      audio.play().catch(() => {
+        /* Placeholder file isn't real audio yet; ignore decode/play errors. */
+      });
+    } else {
+      audio.pause();
+    }
+  };
 
   // Cursor motion also moves the guaranteed first-paint skyline. This effect
   // is intentionally independent from WebGL initialization.
@@ -93,7 +113,7 @@ export function CityScene() {
 
     const tower = new THREE.Group();
     const concrete = new THREE.MeshStandardMaterial({ color: 0xa9b0ad, roughness: 0.72 });
-    const towerGlass = new THREE.MeshStandardMaterial({ color: 0x607c7e, roughness: 0.22, metalness: 0.16 });
+    const towerGlass = new THREE.MeshStandardMaterial({ color: 0xbd3533, roughness: 0.22, metalness: 0.16 });
     const mastMaterial = new THREE.MeshStandardMaterial({ color: 0x939b98, roughness: 0.62 });
     const cylinderBetween = (start: THREE.Vector3, end: THREE.Vector3, radius: number) => {
       const direction = new THREE.Vector3().subVectors(end, start);
@@ -168,8 +188,31 @@ export function CityScene() {
     };
     animate();
 
+    // Easter egg hit-testing: raycast against the CN tower group. Shared by
+    // the click handler (toggle audio) and the move handler (pointer cursor).
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const isOverTower = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      ndc.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1;
+      ndc.y = -((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 + 1;
+      raycaster.setFromCamera(ndc, camera);
+      return raycaster.intersectObjects(tower.children, true).length > 0;
+    };
+    const handleTowerClick = (event: MouseEvent) => {
+      if (isOverTower(event)) toggleEasterEgg();
+    };
+    // Hint that the tower is interactive by swapping to a pointer cursor.
+    const handleTowerHover = (event: MouseEvent) => {
+      canvas.style.cursor = isOverTower(event) ? "pointer" : "";
+    };
+    canvas.addEventListener("click", handleTowerClick);
+    canvas.addEventListener("mousemove", handleTowerHover);
+
     return () => {
       cancelAnimationFrame(frame);
+      canvas.removeEventListener("click", handleTowerClick);
+      canvas.removeEventListener("mousemove", handleTowerHover);
       observer.disconnect();
       mount.classList.remove("webgl-ready");
       scene.traverse((object) => {
@@ -186,7 +229,11 @@ export function CityScene() {
     <div ref={mountRef} className="landing-city" aria-label="Interactive three-dimensional Toronto skyline">
       <div className="landing-skyline-fallback" aria-hidden="true">
         <div className="fallback-buildings">{Array.from({ length: 14 }, (_, index) => <span key={index} />)}</div>
-        <div className="fallback-cn-tower">
+        <div
+          className="fallback-cn-tower"
+          onClick={toggleEasterEgg}
+          style={{ cursor: "pointer", pointerEvents: "auto" }}
+        >
           <span className="fallback-antenna" /><span className="fallback-skypod" />
           <span className="fallback-upper-shaft" /><span className="fallback-main-pod" />
           <span className="fallback-tower-shaft" />

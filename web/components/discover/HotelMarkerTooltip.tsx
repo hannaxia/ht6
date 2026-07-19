@@ -1,5 +1,5 @@
 import type { Stay22Hotel } from "../../lib/api/schemas";
-import { Stay22Attribution } from "../shared/Stay22Attribution";
+import { priceCad } from "../../lib/format";
 
 export function HotelMarkerTooltip({ hotel }: { hotel: Stay22Hotel }) {
   const photo = hotel.images[0];
@@ -39,13 +39,8 @@ export function HotelMarkerTooltip({ hotel }: { hotel: Stay22Hotel }) {
         <p className="text-slate-600">{hotel.rating.toFixed(1)}/5.0 guest rating</p>
       ) : null}
       {hotel.price ? (
-        <p className="text-slate-600">
-          ${hotel.price.amount} {hotel.price.currency}/{hotel.price.per}
-        </p>
+        <p className="text-slate-600">{priceCad(hotel.price)}</p>
       ) : null}
-      <div className="mt-1">
-        <Stay22Attribution />
-      </div>
     </div>
   );
 }

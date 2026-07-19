@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Text selection ("highlight by the cursor") uses the sage accent app-wide. */
+::selection { background: #6f9c7f; color: #fff; }
+
 :root { --landing-ink: #17231f; --landing-paper: #f7f8f6; --landing-copper: #b97138; }
 .landing-shell { position: relative; min-height: 100%; overflow: hidden; isolation: isolate; background: var(--landing-paper); color: var(--landing-ink); }
 .landing-city { --city-shift-x: 0px; --city-shift-y: 0px; position: absolute; inset: 0; z-index: -3; overflow: hidden; }
@@ -21,19 +24,20 @@
 .fallback-cn-tower { position: absolute; z-index: 2; right: 18%; bottom: 3%; width: 9rem; height: 88%; filter: drop-shadow(12px 18px 18px rgba(39, 61, 56, .16)); }
 .fallback-cn-tower span { position: absolute; display: block; left: 50%; transform: translateX(-50%); }
 .fallback-antenna { top: 0; width: 5px; height: 27%; background: #939b98; }
-.fallback-skypod { top: 25%; z-index: 2; width: 2.2rem; height: .8rem; border: 4px solid #a4aca9; border-radius: 45%; background: #607c7e; }
+.fallback-skypod { top: 25%; z-index: 2; width: 2.2rem; height: .8rem; border: 4px solid #a4aca9; border-radius: 45%; background: #bd3533; }
 .fallback-upper-shaft { top: 27%; width: .75rem; height: 20%; clip-path: polygon(32% 0, 68% 0, 100% 100%, 0 100%); background: #a8afac; }
-.fallback-main-pod { top: 43%; z-index: 2; width: 7.5rem; height: 2.35rem; border-radius: 48% 48% 38% 38%; background: linear-gradient(#acb3b0 0 28%, #607c7e 28% 70%, #a4aca8 70%); }
+.fallback-main-pod { top: 43%; z-index: 2; width: 7.5rem; height: 2.35rem; border-radius: 48% 48% 38% 38%; background: linear-gradient(#acb3b0 0 28%, #bd3533 28% 70%, #a4aca8 70%); }
 .fallback-tower-shaft { top: 46%; width: 1.9rem; height: 45%; clip-path: polygon(28% 0, 72% 0, 100% 100%, 0 100%); background: linear-gradient(90deg, #9da5a2, #bcc1bf 55%, #9ba3a0); }
 .fallback-tower-leg { bottom: 0; width: 1.35rem; height: 18%; transform-origin: bottom; background: #a0a8a5; }
 .fallback-tower-leg-left { margin-left: -1.45rem; transform: translateX(-50%) rotate(13deg) !important; }
 .fallback-tower-leg-right { margin-left: 1.45rem; transform: translateX(-50%) rotate(-13deg) !important; }
 .landing-atmosphere { position: absolute; inset: 0; z-index: -2; pointer-events: none; background: linear-gradient(90deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.82) 34%, rgba(249,250,248,0) 56%), linear-gradient(0deg, rgba(231,234,233,.3), transparent 45%); }
 .landing-hero { width: min(690px, calc(100% - 3rem)); padding: clamp(4.5rem, 10vh, 8rem) 0 4rem clamp(1.5rem, 7vw, 7.5rem); }
-.landing-hero h1 { margin: 0; font-family: "Roboto", Arial, sans-serif; font-size: clamp(3.7rem, 7.2vw, 7.4rem); font-weight: 400; line-height: .88; letter-spacing: -.055em; }
 .landing-hero h1 em { display: inline-block; margin-top: .24em; color: #7a9182; font-size: .68em; font-weight: 400; line-height: .94; }
 .landing-get-started { display: inline-flex; align-items: center; justify-content: center; margin-top: 2.25rem; border: 1px solid #718779; background: #7a9182; color: #fff; padding: .85rem 1.65rem; font-family: "Roboto", Arial, sans-serif; font-size: .9rem; font-weight: 500; letter-spacing: .015em; transition: background-color .2s ease, color .2s ease, transform .2s ease; }
 .landing-get-started:hover { background: transparent; color: #52685a; transform: translateY(-2px); }
 .landing-get-started:focus-visible { outline: 2px solid #52685a; outline-offset: 4px; }
+.landing-hero h1 { margin: 0; font-family: "Lexend Deca", sans-serif; font-optical-sizing: auto; font-style: normal; font-size: clamp(3.7rem, 7.2vw, 7.4rem); font-weight: 400; line-height: .88; letter-spacing: -.055em; }
+.landing-hero h1 .landing-i { color: #db3330; }
 @media (max-width: 700px) { .landing-hero { display: flex; min-height: 100%; flex-direction: column; justify-content: flex-end; padding: 6rem 1.5rem 4rem; } .landing-hero h1 { font-size: clamp(3.4rem,17vw,5.5rem); } .landing-atmosphere { background: linear-gradient(0deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.68) 70%, transparent 100%); } .fallback-cn-tower { right: 10%; height: 76%; } .fallback-buildings { width: 100%; height: 35%; } }
 @media (prefers-reduced-motion: reduce) { .landing-skyline-fallback { transition: none; } }

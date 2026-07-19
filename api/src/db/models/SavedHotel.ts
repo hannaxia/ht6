@@ -16,6 +16,9 @@ export interface SavedHotelDoc {
    * listing. Drives whether the sandbox lets the user rename it.
    */
   isCustom: boolean;
+  sourceType: "new" | "existing";
+  sourceHotelId?: string | null;
+  sourceImage?: string | null;
   config: Record<string, unknown>;
   metrics: Record<string, unknown> | null;
   coordinates: { type: "Point"; coordinates: [number, number] };
@@ -28,6 +31,14 @@ export const SavedHotelSchema = new Schema<SavedHotelDoc>(
     userId: { type: String, required: true, index: true },
     name: { type: String, required: true },
     isCustom: { type: Boolean, required: true, default: true },
+    sourceType: {
+      type: String,
+      enum: ["new", "existing"],
+      default: "new",
+      required: true,
+    },
+    sourceHotelId: { type: String, default: null },
+    sourceImage: { type: String, default: null },
     config: { type: Schema.Types.Mixed, required: true },
     metrics: { type: Schema.Types.Mixed, default: null },
     coordinates: {

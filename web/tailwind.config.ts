@@ -8,7 +8,12 @@ const config: Config = {
     "./lib/**/*.{ts,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        // Muted sage used for highlights: active nav pill, selection, etc.
+        accent: "#6f9c7f",
+      },
+    },
   },
   plugins: [],
 };
