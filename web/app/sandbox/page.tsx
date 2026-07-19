@@ -307,12 +307,15 @@ export default function SandboxPage() {
             hasPool={config.amenities.includes("pool")}
             petFriendly={config.amenities.includes("pet_friendly")}
             airportShuttle={config.amenities.includes("airport_shuttle")}
+            parking={config.amenities.includes("parking")}
+            evCharging={config.amenities.includes("ev_charging")}
           />
         </div>
       </div>
       {/* Break out of the max-w-7xl main and re-align to the header's
-          max-w-6xl container so the button's right edge matches Log out. */}
-      <div className="-mx-6">
+          max-w-6xl container so the button's right edge matches Log out.
+          Positioned above the 3D scene, which overflows its cell downward. */}
+      <div className="relative z-10 -mx-6">
         <div className="mx-auto flex w-full max-w-6xl justify-end px-6">
           {isAuthenticated ? (
             <button

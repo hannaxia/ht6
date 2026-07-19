@@ -18,9 +18,24 @@ const LIGHT = {
   elevation: 38,
 };
 
+// The building is framed to this reference box (the visible layout cell). The
+// render canvas is then enlarged past the cell to the bottom/right so ground
+// decor isn't cropped; the frustum is offset to keep the building's size and
+// position pinned to this reference framing (see fitCamera).
+const BASE_FOV = 45;
+// How far the render canvas extends past its layout box, as a fraction, on the
+// right and bottom. The extra area spills over the page margins on purpose.
+const SCENE_EXTEND_RIGHT = 0.38;
+const SCENE_EXTEND_BOTTOM = 0.34;
+
 const FLOOR_COLOR = 0xd8d8d3;
 const POOL_WATER_COLOR = 0x2f7fb0;
 const POOL_WALL_COLOR = 0xb9bdba;
+// Parking lot dressing: white painted stall lines, concrete wheel-stop curbs,
+// and a tall grey prism standing in for an EV charger.
+const PARKING_LINE_COLOR = 0xf2f2ef;
+const CURB_COLOR = 0xb9bdba;
+const EV_CHARGER_COLOR = 0xdcdcdc;
 // Same neutral grey as the building's own material — pet and vehicles stay
 // monochrome (minimalist look); only roughness varies for part definition.
 const MODEL_GREY = 0xe4e4e4;
@@ -209,7 +224,13 @@ function buildLowPolyCar(kind: ShuttleKind, length: number): THREE.Group {
 function buildGroundDecor(
   footprint: Footprint,
   hotelType: HotelConfigPayload["hotelType"],
-  opts: { hasPool: boolean; petFriendly: boolean; airportShuttle: boolean },
+  opts: {
+    hasPool: boolean;
+    petFriendly: boolean;
+    airportShuttle: boolean;
+    parking: boolean;
+    evCharging: boolean;
+  },
 ): THREE.Group {
   const group = new THREE.Group();
   const { halfWidth, halfDepth, baseY, height } = footprint;
@@ -218,18 +239,31 @@ function buildGroundDecor(
   // back + the largest possible shuttle vehicle to the right), so toggling
   // amenities on/off never grows or shrinks the floor itself — only the pool
   // hole, pet, and car appear/disappear within these fixed bounds. ----
-  const poolHalfWidth = halfWidth * 0.55;
-  const poolHalfDepth = halfDepth * 0.32;
+  const poolHalfWidth = halfWidth * 0.66;
+  const poolHalfDepth = halfDepth * 0.4;
   const poolGap = halfDepth * 0.25;
   const poolCenterZ = -(halfDepth + poolGap + poolHalfDepth); // back = −Z
 
   const edgeMargin = Math.max(halfWidth, halfDepth) * 0.35;
   const carGap = halfWidth * 0.35;
   const maxCarLength = halfWidth * 0.85; // limo is the largest shuttle vehicle
-  const carFarX = halfWidth + carGap + maxCarLength;
+  const carFarX = halfWidth + carGap + maxCarLength; // shuttle side, right (+X)
 
-  const floorHalfWidth = carFarX + edgeMargin;
-  const floorFrontZ = halfDepth + edgeMargin; // doorway side
+  // Parking lot on the LEFT (−X), opposite the shuttle. Stalls are sized so a
+  // shuttle-scale vehicle would fit, and are always reserved in the floor
+  // bounds (like the pool/shuttle) so toggling parking never resizes the lot.
+  const vehicleRef = Math.max(halfWidth, halfDepth);
+  const parkGap = halfWidth * 0.35;
+  const stallDepth = vehicleRef * 0.9; // along X (≈ a car length)
+  const stallWidth = vehicleRef * 0.5; // along Z (per stall)
+  const parkCount = 3;
+  const parkSpanZ = stallWidth * parkCount;
+  const parkNearX = -(halfWidth + parkGap); // stall mouth (toward building)
+  const parkFarX = parkNearX - stallDepth; // stall head (outward, −X)
+
+  const floorHalfWidth =
+    Math.max(carFarX, halfWidth + parkGap + stallDepth) + edgeMargin;
+  const floorFrontZ = Math.max(halfDepth + edgeMargin, parkSpanZ / 2 + edgeMargin); // doorway side
   const floorBackZ = poolCenterZ - poolHalfDepth - edgeMargin; // pool side, always reserved
 
   const shape = new THREE.Shape();
@@ -316,6 +350,69 @@ function buildGroundDecor(
     group.add(rightWall);
   }
 
+  // ---- Parking lot, left of the building (−X), opposite the shuttle ----
+  if (opts.parking) {
+    const lineMaterial = new THREE.MeshStandardMaterial({
+      color: PARKING_LINE_COLOR,
+      roughness: 0.8,
+    });
+    const curbMaterial = new THREE.MeshStandardMaterial({
+      color: CURB_COLOR,
+      roughness: 0.85,
+    });
+    // Painted lines sit a hair above the floor to avoid z-fighting.
+    const lineLift = Math.max(height * 0.004, vehicleRef * 0.004);
+    const lineThickness = stallWidth * 0.06;
+    const stallCenterX = parkNearX - stallDepth / 2;
+
+    // Divider lines run along X (near→far), spaced across Z: parkCount+1 lines
+    // bound the three stalls.
+    for (let i = 0; i <= parkCount; i++) {
+      const z = -parkSpanZ / 2 + i * stallWidth;
+      const line = new THREE.Mesh(
+        new THREE.BoxGeometry(stallDepth, lineLift, lineThickness),
+        lineMaterial,
+      );
+      line.position.set(stallCenterX, baseY + lineLift / 2, z);
+      group.add(line);
+    }
+
+    // Concrete wheel-stop curb at the head (far −X end) of each stall.
+    const curbH = vehicleRef * 0.06;
+    const curbDepthX = stallDepth * 0.08;
+    for (let s = 0; s < parkCount; s++) {
+      const zc = -parkSpanZ / 2 + (s + 0.5) * stallWidth;
+      const curb = new THREE.Mesh(
+        new THREE.BoxGeometry(curbDepthX, curbH, stallWidth * 0.6),
+        curbMaterial,
+      );
+      curb.position.set(parkFarX + curbDepthX / 2, baseY + curbH / 2, zc);
+      group.add(curb);
+    }
+  }
+
+  // ---- EV charger: upright rectangular prism at the head of the lot ----
+  if (opts.evCharging) {
+    const evMaterial = new THREE.MeshStandardMaterial({
+      color: EV_CHARGER_COLOR,
+      roughness: 0.5,
+      flatShading: true,
+    });
+    const evFootprint = vehicleRef * 0.1;
+    const evHeight = vehicleRef * 0.42;
+    const charger = new THREE.Mesh(
+      new THREE.BoxGeometry(evFootprint, evHeight, evFootprint),
+      evMaterial,
+    );
+    // Stands just outside the stall heads (−X), aligned to an inner divider.
+    charger.position.set(
+      parkFarX + evFootprint / 2,
+      baseY + evHeight / 2,
+      -parkSpanZ / 2 + stallWidth,
+    );
+    group.add(charger);
+  }
+
   // ---- Pet, near the doorway (front, +Z) ----
   if (opts.petFriendly) {
     const petSize = Math.max(halfWidth, halfDepth) * 0.16;
@@ -356,11 +453,15 @@ export function SandboxModel({
   hasPool,
   petFriendly,
   airportShuttle,
+  parking,
+  evCharging,
 }: {
   hotelType: HotelConfigPayload["hotelType"];
   hasPool: boolean;
   petFriendly: boolean;
   airportShuttle: boolean;
+  parking: boolean;
+  evCharging: boolean;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const modelSrc = modelUrl(modelForHotelType(hotelType));
@@ -374,6 +475,10 @@ export function SandboxModel({
   petFriendlyRef.current = petFriendly;
   const airportShuttleRef = useRef(airportShuttle);
   airportShuttleRef.current = airportShuttle;
+  const parkingRef = useRef(parking);
+  parkingRef.current = parking;
+  const evChargingRef = useRef(evCharging);
+  evChargingRef.current = evCharging;
   const syncDecorRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -390,7 +495,7 @@ export function SandboxModel({
 
     const scene = new THREE.Scene(); // no background → transparent
 
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 5000);
+    const camera = new THREE.PerspectiveCamera(BASE_FOV, width / height, 0.1, 5000);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setClearColor(0x000000, 0);
@@ -450,23 +555,54 @@ export function SandboxModel({
         hasPool: hasPoolRef.current,
         petFriendly: petFriendlyRef.current,
         airportShuttle: airportShuttleRef.current,
+        parking: parkingRef.current,
+        evCharging: evChargingRef.current,
       });
       pivot.add(decorGroup);
     }
     syncDecorRef.current = syncDecor;
 
-    // Frame the model so its bounding sphere fits both axes at the current
-    // aspect ratio — this is what guarantees nothing is cut off.
+    // Frame the model against the *reference box* (the visible layout cell,
+    // = the mount's parent), then render into the larger mount canvas without
+    // changing the building's size or on-screen position. The building stays
+    // fit to the reference box exactly as before; the extra canvas area to the
+    // bottom/right simply reveals ground decor that used to be cropped.
     function fitCamera() {
-      const fov = (camera.fov * Math.PI) / 180;
-      const fitH = modelRadius / Math.sin(fov / 2);
-      const fitW = fitH / Math.min(1, camera.aspect);
+      const parent = el.parentElement;
+      const refW = parent?.clientWidth || el.clientWidth || 1;
+      const refH = parent?.clientHeight || el.clientHeight || 1;
+      const renderW = el.clientWidth || refW;
+      const renderH = el.clientHeight || refH;
+
+      // Distance from the reference framing — unchanged from before, so the
+      // building's size and framing match the original layout box.
+      const baseFov = (BASE_FOV * Math.PI) / 180;
+      const refAspect = refW / refH;
+      const fitH = modelRadius / Math.sin(baseFov / 2);
+      const fitW = fitH / Math.min(1, refAspect);
       const distance = 1.25 * Math.max(fitH, fitW);
       const dir = new THREE.Vector3(1, 0.55, 1).normalize();
       camera.position.copy(dir.multiplyScalar(distance));
       camera.near = distance / 100;
       camera.far = distance * 100;
       camera.lookAt(0, 0, 0);
+
+      // Widen the frustum to cover the extra render width/height, and offset it
+      // so the reference-sized region stays anchored to the mount's top-left.
+      // This keeps the building pinned in place at its original size while the
+      // added bottom/right area extends the visible scene.
+      const fovFull =
+        2 * Math.atan(Math.tan(baseFov / 2) * (renderH / refH));
+      camera.fov = (fovFull * 180) / Math.PI;
+      camera.aspect = renderW / renderH;
+      camera.setViewOffset(
+        renderW,
+        renderH,
+        (renderW - refW) / 2,
+        (renderH - refH) / 2,
+        renderW,
+        renderH,
+      );
       camera.updateProjectionMatrix();
     }
 
@@ -554,7 +690,23 @@ export function SandboxModel({
   // heavy effect above wired up — no FBX reload, no scene reset.
   useEffect(() => {
     syncDecorRef.current?.();
-  }, [hasPool, petFriendly, airportShuttle]);
+  }, [hasPool, petFriendly, airportShuttle, parking, evCharging]);
 
-  return <div ref={mountRef} className="h-full w-full" aria-hidden="true" />;
+  // Outer box is the reference framing (the layout cell). The inner mount is
+  // the actual render canvas, sized larger so it spills past the box to the
+  // bottom/right — decor that was cropped now renders into that overflow.
+  return (
+    <div className="relative h-full w-full">
+      <div
+        ref={mountRef}
+        className="absolute left-0 top-0 overflow-visible"
+        style={{
+          width: `${(1 + SCENE_EXTEND_RIGHT) * 100}%`,
+          height: `${(1 + SCENE_EXTEND_BOTTOM) * 100}%`,
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+      />
+    </div>
+  );
 }

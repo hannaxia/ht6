@@ -23,6 +23,8 @@ export function SavedHotelPreview({ config }: { config: HotelConfigPayload }) {
       hasPool={config.amenities.includes("pool")}
       petFriendly={config.amenities.includes("pet_friendly")}
       airportShuttle={config.amenities.includes("airport_shuttle")}
+      parking={config.amenities.includes("parking")}
+      evCharging={config.amenities.includes("ev_charging")}
     />
   );
 }
