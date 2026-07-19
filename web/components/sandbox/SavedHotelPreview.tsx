@@ -20,11 +20,9 @@ export function SavedHotelPreview({ config }: { config: HotelConfigPayload }) {
   return (
     <SandboxModel
       hotelType={config.hotelType}
-      hasPool={config.amenities.includes("pool")}
-      petFriendly={config.amenities.includes("pet_friendly")}
-      airportShuttle={config.amenities.includes("airport_shuttle")}
-      parking={config.amenities.includes("parking")}
-      evCharging={config.amenities.includes("ev_charging")}
+      rooms={config.rooms}
+      modernity={config.modernity}
+      amenities={config.amenities}
     />
   );
 }

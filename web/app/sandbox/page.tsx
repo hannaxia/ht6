@@ -329,11 +329,9 @@ export default function SandboxPage() {
         <div className="-mt-8 min-h-[340px] lg:min-h-[420px]">
           <SandboxModel
             hotelType={config.hotelType}
-            hasPool={config.amenities.includes("pool")}
-            petFriendly={config.amenities.includes("pet_friendly")}
-            airportShuttle={config.amenities.includes("airport_shuttle")}
-            parking={config.amenities.includes("parking")}
-            evCharging={config.amenities.includes("ev_charging")}
+            rooms={config.rooms}
+            modernity={config.modernity}
+            amenities={config.amenities}
           />
         </div>
       </div>

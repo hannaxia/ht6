@@ -5,6 +5,11 @@ import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import type { HotelConfigPayload } from "../../lib/api/schemas";
 import { modelForHotelType, modelUrl } from "./hotelModel";
+import {
+  buildGroundDecor,
+  disposeObject,
+  type Footprint,
+} from "./groundDecor";
 
 // Baked-in lighting (tuned in-browser). Angles are degrees: azimuth is the
 // key light's compass direction around the model, elevation its height above
@@ -18,469 +23,263 @@ const LIGHT = {
   elevation: 38,
 };
 
+// Rooms (50-500 slider range) map to an anisotropic scale on the building —
+// mostly vertical, with a slighter footprint change, so a big hotel reads as
+// "taller" more than "wider." The lot/floor deliberately does not scale with
+// this — only the building mesh.
+const ROOMS_MIN = 50;
+const ROOMS_MAX = 500;
+const ROOMS_SCALE_XZ: [number, number] = [0.92, 1.15];
+const ROOMS_SCALE_Y: [number, number] = [0.8, 1.45];
+const ROOMS_SCALE_LERP = 0.08;
+
+// Modernity (0-1) maps to material roughness/color only — no new geometry.
+const MODERNITY_ROUGHNESS: [number, number] = [0.75, 0.45];
+const MODERNITY_COLOR: [number, number] = [0xcfcfc9, 0xeeeeea];
+
+const FIRST_LOAD_DURATION_MS = 500;
+const SWAP_DURATION_MS = 650;
+
 // The building is framed to this reference box (the visible layout cell). The
 // render canvas is then enlarged past the cell to the bottom/right so ground
 // decor isn't cropped; the frustum is offset to keep the building's size and
-// position pinned to this reference framing (see fitCamera).
+// position pinned to this reference framing (see updateCamera).
 const BASE_FOV = 45;
 // How far the render canvas extends past its layout box, as a fraction, on the
 // right and bottom. The extra area spills over the page margins on purpose.
 const SCENE_EXTEND_RIGHT = 0.38;
 const SCENE_EXTEND_BOTTOM = 0.34;
 
-const FLOOR_COLOR = 0xd8d8d3;
-const POOL_WATER_COLOR = 0x2f7fb0;
-const POOL_WALL_COLOR = 0xb9bdba;
-// Parking lot dressing: white painted stall lines, concrete wheel-stop curbs,
-// and a tall grey prism standing in for an EV charger.
-const PARKING_LINE_COLOR = 0xf2f2ef;
-const CURB_COLOR = 0xb9bdba;
-const EV_CHARGER_COLOR = 0xdcdcdc;
-// Same neutral grey as the building's own material — pet and vehicles stay
-// monochrome (minimalist look); only roughness varies for part definition.
-const MODEL_GREY = 0xe4e4e4;
+// Camera orbit: free drag in any direction orbits azimuth/elevation around
+// the static scene; wheel zooms. Elevation is clamped so the camera can
+// never dip below the floor or flip past straight-down/up; zoom is clamped
+// to a limited range around the auto-fit distance.
+const ELEVATION_MIN = THREE.MathUtils.degToRad(8);
+const ELEVATION_MAX = THREE.MathUtils.degToRad(82);
+const ZOOM_MIN = 0.55;
+const ZOOM_MAX = 2.2;
+const AUTO_ROTATE_SPEED = 0.005; // radians/frame
+const DRAG_ORBIT_SPEED = 0.008; // radians per pixel dragged
+const ZOOM_WHEEL_SPEED = 0.0015; // zoom-multiplier change per wheel deltaY unit
 
-interface Footprint {
-  halfWidth: number;
-  halfDepth: number;
-  /** World y of the building's base (bottom of its bounding box). */
-  baseY: number;
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function computeRoomsScale(rooms: number) {
+  const t = THREE.MathUtils.clamp((rooms - ROOMS_MIN) / (ROOMS_MAX - ROOMS_MIN), 0, 1);
+  return {
+    x: THREE.MathUtils.lerp(ROOMS_SCALE_XZ[0], ROOMS_SCALE_XZ[1], t),
+    y: THREE.MathUtils.lerp(ROOMS_SCALE_Y[0], ROOMS_SCALE_Y[1], t),
+    z: THREE.MathUtils.lerp(ROOMS_SCALE_XZ[0], ROOMS_SCALE_XZ[1], t),
+  };
+}
+
+function materialParamsForModernity(modernity: number) {
+  const t = THREE.MathUtils.clamp(modernity, 0, 1);
+  return {
+    color: new THREE.Color(MODERNITY_COLOR[0]).lerp(new THREE.Color(MODERNITY_COLOR[1]), t),
+    roughness: THREE.MathUtils.lerp(MODERNITY_ROUGHNESS[0], MODERNITY_ROUGHNESS[1], t),
+  };
+}
+
+interface ModelEntry {
+  scaleGroup: THREE.Group;
+  radius: number;
   height: number;
+  footprint: Footprint;
+  materials: THREE.MeshStandardMaterial[];
 }
 
-type ShuttleKind = "car" | "van" | "limo";
-
-function shuttleKindForHotelType(
-  hotelType: HotelConfigPayload["hotelType"],
-): ShuttleKind {
-  switch (hotelType) {
-    case "upscale":
-    case "resort":
-      return "van";
-    case "luxury":
-      return "limo";
-    default:
-      return "car";
-  }
+interface TransitionState {
+  from: ModelEntry | null;
+  to: ModelEntry;
+  start: number;
+  duration: number;
 }
 
-function disposeObject(obj: THREE.Object3D) {
-  obj.traverse((child) => {
-    const mesh = child as THREE.Mesh;
-    if (!mesh.geometry) return;
-    mesh.geometry.dispose();
-    const mat = mesh.material;
-    if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-    else if (mat) mat.dispose();
-  });
+// Scaling happens about scaleGroup's own origin (the object's vertical
+// center, since the object was recentered there), so growing/shrinking the
+// height would otherwise sink the base below — or float it above — the
+// floor. This offsets scaleGroup so the base always lands exactly on the
+// floor (footprint.baseY) regardless of scale.y; only the top moves.
+function scaleAnchorOffsetY(height: number, scaleY: number) {
+  return (height / 2) * (scaleY - 1);
 }
 
-/** A small low-poly quadruped (dog-like) built from primitives, standing at ground level (local y=0). */
-function buildLowPolyPet(size: number): THREE.Group {
-  const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({
-    color: MODEL_GREY,
-    roughness: 0.65,
-    flatShading: true,
-  });
-
-  const bodyLen = size;
-  const bodyH = size * 0.42;
-  const bodyW = size * 0.4;
-  const legH = size * 0.32;
-  const legR = size * 0.07;
-
-  const body = new THREE.Mesh(new THREE.BoxGeometry(bodyLen, bodyH, bodyW), material);
-  body.position.y = legH + bodyH / 2;
-  group.add(body);
-
-  const head = new THREE.Mesh(
-    new THREE.BoxGeometry(size * 0.34, size * 0.32, size * 0.3),
-    material,
-  );
-  head.position.set(bodyLen / 2 + size * 0.1, legH + bodyH * 0.7, 0);
-  group.add(head);
-
-  const earGeometry = new THREE.ConeGeometry(size * 0.07, size * 0.16, 4);
-  const earLeft = new THREE.Mesh(earGeometry, material);
-  earLeft.position.set(
-    head.position.x - size * 0.06,
-    head.position.y + size * 0.22,
-    size * 0.09,
-  );
-  group.add(earLeft);
-  const earRight = earLeft.clone();
-  earRight.position.z = -size * 0.09;
-  group.add(earRight);
-
-  const tail = new THREE.Mesh(
-    new THREE.BoxGeometry(size * 0.28, size * 0.08, size * 0.08),
-    material,
-  );
-  tail.position.set(-bodyLen / 2 - size * 0.08, legH + bodyH * 0.75, 0);
-  tail.rotation.z = -0.5;
-  group.add(tail);
-
-  const legGeometry = new THREE.CylinderGeometry(legR, legR, legH, 6);
-  const legInsetX = bodyLen / 2 - legR * 1.5;
-  const legInsetZ = bodyW / 2 - legR * 1.5;
-  for (const x of [legInsetX, -legInsetX]) {
-    for (const z of [legInsetZ, -legInsetZ]) {
-      const leg = new THREE.Mesh(legGeometry, material);
-      leg.position.set(x, legH / 2, z);
-      group.add(leg);
-    }
-  }
-
-  return group;
+function applyScaleLerp(
+  entry: ModelEntry | null,
+  target: { x: number; y: number; z: number },
+  factor = ROOMS_SCALE_LERP,
+) {
+  if (!entry) return;
+  entry.scaleGroup.scale.x = THREE.MathUtils.lerp(entry.scaleGroup.scale.x, target.x, factor);
+  entry.scaleGroup.scale.y = THREE.MathUtils.lerp(entry.scaleGroup.scale.y, target.y, factor);
+  entry.scaleGroup.scale.z = THREE.MathUtils.lerp(entry.scaleGroup.scale.z, target.z, factor);
+  entry.scaleGroup.position.y = scaleAnchorOffsetY(entry.height, entry.scaleGroup.scale.y);
 }
 
-// Per-kind proportions (fractions of overall `length`) for the low-poly
-// airport shuttle vehicle. Shape alone distinguishes car/van/limo — colour
-// is uniform grey across all three (see MODEL_GREY) for the minimalist look.
-const CAR_STYLES: Record<
-  ShuttleKind,
-  {
-    widthFrac: number;
-    bodyHFrac: number;
-    cabinHFrac: number;
-    cabinLenFrac: number;
-    wheelRFrac: number;
-  }
-> = {
-  car: { widthFrac: 0.42, bodyHFrac: 0.2, cabinHFrac: 0.2, cabinLenFrac: 0.55, wheelRFrac: 0.115 },
-  van: { widthFrac: 0.46, bodyHFrac: 0.3, cabinHFrac: 0.16, cabinLenFrac: 0.85, wheelRFrac: 0.12 },
-  limo: { widthFrac: 0.36, bodyHFrac: 0.15, cabinHFrac: 0.13, cabinLenFrac: 0.68, wheelRFrac: 0.1 },
-};
-
-/** A small low-poly car/van/limousine built from primitives, standing at ground level (local y=0). */
-function buildLowPolyCar(kind: ShuttleKind, length: number): THREE.Group {
-  const style = CAR_STYLES[kind];
-  const group = new THREE.Group();
-  const width = length * style.widthFrac;
-  const bodyH = length * style.bodyHFrac;
-  const cabinH = length * style.cabinHFrac;
-  const wheelR = length * style.wheelRFrac;
-  const wheelThickness = wheelR * 0.6;
-
-  const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: MODEL_GREY,
-    roughness: 0.5,
-    flatShading: true,
+function setOpacity(entry: ModelEntry | null, value: number) {
+  if (!entry) return;
+  entry.materials.forEach((m) => {
+    m.opacity = value;
   });
-  const glassMaterial = new THREE.MeshStandardMaterial({
-    color: MODEL_GREY,
-    roughness: 0.25,
-    flatShading: true,
-  });
-  const wheelMaterial = new THREE.MeshStandardMaterial({
-    color: MODEL_GREY,
-    roughness: 0.9,
-    flatShading: true,
-  });
-
-  const bodyBottomY = wheelR * 0.9;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(length, bodyH, width), bodyMaterial);
-  body.position.y = bodyBottomY + bodyH / 2;
-  group.add(body);
-
-  const cabinLen = length * style.cabinLenFrac;
-  const cabin = new THREE.Mesh(
-    new THREE.BoxGeometry(cabinLen, cabinH, width * 0.8),
-    glassMaterial,
-  );
-  cabin.position.y = bodyBottomY + bodyH + cabinH / 2;
-  group.add(cabin);
-
-  const wheelGeometry = new THREE.CylinderGeometry(wheelR, wheelR, wheelThickness, 10);
-  const axleX = length * 0.32;
-  const axleZ = width / 2 - wheelR * 0.5;
-  for (const x of [axleX, -axleX]) {
-    for (const z of [axleZ, -axleZ]) {
-      const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-      wheel.rotation.x = Math.PI / 2;
-      wheel.position.set(x, wheelR, z);
-      group.add(wheel);
-    }
-  }
-
-  return group;
 }
 
 /**
- * Builds everything the building stands on/beside: a flat rectangular floor
- * sized from the building's own footprint, plus optional set dressing driven
- * by amenity toggles — all parented under one group so they can be swapped
- * as a unit without touching the building itself.
- *
- * - `hasPool`: cuts a rectangular pool-shaped hole (THREE.Shape + hole path)
- *   into the floor at the BACK of the building (−Z), with a recessed water
- *   plane and thin walls so it reads as a basin, not a flat colour patch.
- * - `petFriendly`: a small low-poly animal near the doorway (front, +Z).
- * - `airportShuttle`: a low-poly vehicle to the right of the building (+X),
- *   whose kind follows the hotel type — car for budget/midscale/extended
- *   stay, van for upscale/resort, limousine for luxury.
+ * Recenters the loaded FBX and wraps it in a scale group (rooms), registering
+ * its materials so modernity changes can restyle them later without a
+ * reload, and so a hotel-type swap can dissolve between them (see the
+ * opacity crossfade in animate()).
  */
-function buildGroundDecor(
-  footprint: Footprint,
-  hotelType: HotelConfigPayload["hotelType"],
-  opts: {
-    hasPool: boolean;
-    petFriendly: boolean;
-    airportShuttle: boolean;
-    parking: boolean;
-    evCharging: boolean;
-  },
-): THREE.Group {
-  const group = new THREE.Group();
-  const { halfWidth, halfDepth, baseY, height } = footprint;
+function buildEntry(
+  object: THREE.Group,
+  modernity: number,
+  rooms: number,
+  allMaterials: Set<THREE.MeshStandardMaterial>,
+): ModelEntry {
+  const box = new THREE.Box3().setFromObject(object);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  object.position.sub(center);
 
-  // ---- Floor: always sized for the maximum amenity extent (pool at the
-  // back + the largest possible shuttle vehicle to the right), so toggling
-  // amenities on/off never grows or shrinks the floor itself — only the pool
-  // hole, pet, and car appear/disappear within these fixed bounds. ----
-  const poolHalfWidth = halfWidth * 0.66;
-  const poolHalfDepth = halfDepth * 0.4;
-  const poolGap = halfDepth * 0.25;
-  const poolCenterZ = -(halfDepth + poolGap + poolHalfDepth); // back = −Z
-
-  const edgeMargin = Math.max(halfWidth, halfDepth) * 0.35;
-  const carGap = halfWidth * 0.35;
-  const maxCarLength = halfWidth * 0.85; // limo is the largest shuttle vehicle
-  const carFarX = halfWidth + carGap + maxCarLength; // shuttle side, right (+X)
-
-  // Parking lot on the LEFT (−X), opposite the shuttle. Stalls are sized so a
-  // shuttle-scale vehicle would fit, and are always reserved in the floor
-  // bounds (like the pool/shuttle) so toggling parking never resizes the lot.
-  const vehicleRef = Math.max(halfWidth, halfDepth);
-  const parkGap = halfWidth * 0.35;
-  const stallDepth = vehicleRef * 0.9; // along X (≈ a car length)
-  const stallWidth = vehicleRef * 0.5; // along Z (per stall)
-  const parkCount = 3;
-  const parkSpanZ = stallWidth * parkCount;
-  const parkNearX = -(halfWidth + parkGap); // stall mouth (toward building)
-  const parkFarX = parkNearX - stallDepth; // stall head (outward, −X)
-
-  const floorHalfWidth =
-    Math.max(carFarX, halfWidth + parkGap + stallDepth) + edgeMargin;
-  const floorFrontZ = Math.max(halfDepth + edgeMargin, parkSpanZ / 2 + edgeMargin); // doorway side
-  const floorBackZ = poolCenterZ - poolHalfDepth - edgeMargin; // pool side, always reserved
-
-  const shape = new THREE.Shape();
-  shape.moveTo(-floorHalfWidth, floorBackZ);
-  shape.lineTo(floorHalfWidth, floorBackZ);
-  shape.lineTo(floorHalfWidth, floorFrontZ);
-  shape.lineTo(-floorHalfWidth, floorFrontZ);
-  shape.closePath();
-
-  if (opts.hasPool) {
-    const hole = new THREE.Path();
-    hole.moveTo(-poolHalfWidth, poolCenterZ - poolHalfDepth);
-    hole.lineTo(poolHalfWidth, poolCenterZ - poolHalfDepth);
-    hole.lineTo(poolHalfWidth, poolCenterZ + poolHalfDepth);
-    hole.lineTo(-poolHalfWidth, poolCenterZ + poolHalfDepth);
-    hole.closePath();
-    shape.holes.push(hole);
-  }
-
-  const floorMesh = new THREE.Mesh(
-    new THREE.ShapeGeometry(shape),
-    new THREE.MeshStandardMaterial({
-      color: FLOOR_COLOR,
-      roughness: 0.95,
+  const { color, roughness } = materialParamsForModernity(modernity);
+  const materials: THREE.MeshStandardMaterial[] = [];
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    // No texture map → a plain, brightish neutral-grey material, so the
+    // buildings render monochrome with lighting/shading only (no colour).
+    // transparent+opacity drive the dissolve crossfade in animate().
+    const material = new THREE.MeshStandardMaterial({
+      color: color.clone(),
+      roughness,
       metalness: 0,
-      side: THREE.DoubleSide,
-    }),
-  );
-  // The shape is authored flat in local XY; rotate it onto the ground plane
-  // so shape-y becomes world z.
-  floorMesh.rotation.x = Math.PI / 2;
-  floorMesh.position.y = baseY;
-  group.add(floorMesh);
-
-  if (opts.hasPool) {
-    const recess = Math.max(height * 0.035, Math.max(halfWidth, halfDepth) * 0.02);
-
-    const waterShape = new THREE.Shape();
-    waterShape.moveTo(-poolHalfWidth, poolCenterZ - poolHalfDepth);
-    waterShape.lineTo(poolHalfWidth, poolCenterZ - poolHalfDepth);
-    waterShape.lineTo(poolHalfWidth, poolCenterZ + poolHalfDepth);
-    waterShape.lineTo(-poolHalfWidth, poolCenterZ + poolHalfDepth);
-    waterShape.closePath();
-    const waterMesh = new THREE.Mesh(
-      new THREE.ShapeGeometry(waterShape),
-      new THREE.MeshStandardMaterial({
-        color: POOL_WATER_COLOR,
-        roughness: 0.15,
-        metalness: 0.05,
-        side: THREE.DoubleSide,
-      }),
-    );
-    waterMesh.rotation.x = Math.PI / 2;
-    waterMesh.position.y = baseY - recess;
-    group.add(waterMesh);
-
-    const wallThickness = Math.max(poolHalfWidth, poolHalfDepth) * 0.04;
-    const wallMaterial = new THREE.MeshStandardMaterial({
-      color: POOL_WALL_COLOR,
-      roughness: 0.85,
+      transparent: true,
+      opacity: 1,
     });
-    const wallY = baseY - recess / 2;
+    mesh.material = material;
+    materials.push(material);
+  });
+  materials.forEach((m) => allMaterials.add(m));
 
-    const nearWall = new THREE.Mesh(
-      new THREE.BoxGeometry(poolHalfWidth * 2 + wallThickness, recess, wallThickness),
-      wallMaterial,
-    );
-    nearWall.position.set(0, wallY, poolCenterZ - poolHalfDepth);
-    group.add(nearWall);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const radius = sphere.radius || 1;
+  const height = Math.max(size.y, 0.01);
 
-    const farWall = nearWall.clone();
-    farWall.position.z = poolCenterZ + poolHalfDepth;
-    group.add(farWall);
+  const targetScale = computeRoomsScale(rooms);
+  const scaleGroup = new THREE.Group();
+  scaleGroup.scale.set(targetScale.x, targetScale.y, targetScale.z);
+  scaleGroup.position.y = scaleAnchorOffsetY(height, targetScale.y);
+  scaleGroup.add(object);
 
-    const leftWall = new THREE.Mesh(
-      new THREE.BoxGeometry(wallThickness, recess, poolHalfDepth * 2),
-      wallMaterial,
-    );
-    leftWall.position.set(-poolHalfWidth, wallY, poolCenterZ);
-    group.add(leftWall);
+  const footprint: Footprint = {
+    halfWidth: Math.max(size.x / 2, 0.01),
+    halfDepth: Math.max(size.z / 2, 0.01),
+    baseY: -size.y / 2,
+    height,
+  };
 
-    const rightWall = leftWall.clone();
-    rightWall.position.x = poolHalfWidth;
-    group.add(rightWall);
-  }
+  return { scaleGroup, radius, height, footprint, materials };
+}
 
-  // ---- Parking lot, left of the building (−X), opposite the shuttle ----
-  if (opts.parking) {
-    const lineMaterial = new THREE.MeshStandardMaterial({
-      color: PARKING_LINE_COLOR,
-      roughness: 0.8,
-    });
-    const curbMaterial = new THREE.MeshStandardMaterial({
-      color: CURB_COLOR,
-      roughness: 0.85,
-    });
-    // Painted lines sit a hair above the floor to avoid z-fighting.
-    const lineLift = Math.max(height * 0.004, vehicleRef * 0.004);
-    const lineThickness = stallWidth * 0.06;
-    const stallCenterX = parkNearX - stallDepth / 2;
-
-    // Divider lines run along X (near→far), spaced across Z: parkCount+1 lines
-    // bound the three stalls.
-    for (let i = 0; i <= parkCount; i++) {
-      const z = -parkSpanZ / 2 + i * stallWidth;
-      const line = new THREE.Mesh(
-        new THREE.BoxGeometry(stallDepth, lineLift, lineThickness),
-        lineMaterial,
-      );
-      line.position.set(stallCenterX, baseY + lineLift / 2, z);
-      group.add(line);
-    }
-
-    // Concrete wheel-stop curb at the head (far −X end) of each stall.
-    const curbH = vehicleRef * 0.06;
-    const curbDepthX = stallDepth * 0.08;
-    for (let s = 0; s < parkCount; s++) {
-      const zc = -parkSpanZ / 2 + (s + 0.5) * stallWidth;
-      const curb = new THREE.Mesh(
-        new THREE.BoxGeometry(curbDepthX, curbH, stallWidth * 0.6),
-        curbMaterial,
-      );
-      curb.position.set(parkFarX + curbDepthX / 2, baseY + curbH / 2, zc);
-      group.add(curb);
-    }
-  }
-
-  // ---- EV charger: upright rectangular prism at the head of the lot ----
-  if (opts.evCharging) {
-    const evMaterial = new THREE.MeshStandardMaterial({
-      color: EV_CHARGER_COLOR,
-      roughness: 0.5,
-      flatShading: true,
-    });
-    const evFootprint = vehicleRef * 0.1;
-    const evHeight = vehicleRef * 0.42;
-    const charger = new THREE.Mesh(
-      new THREE.BoxGeometry(evFootprint, evHeight, evFootprint),
-      evMaterial,
-    );
-    // Stands just outside the stall heads (−X), aligned to an inner divider.
-    charger.position.set(
-      parkFarX + evFootprint / 2,
-      baseY + evHeight / 2,
-      -parkSpanZ / 2 + stallWidth,
-    );
-    group.add(charger);
-  }
-
-  // ---- Pet, near the doorway (front, +Z) ----
-  if (opts.petFriendly) {
-    const petSize = Math.max(halfWidth, halfDepth) * 0.16;
-    const pet = buildLowPolyPet(petSize);
-    pet.position.set(halfWidth * 0.4, baseY, halfDepth + petSize * 0.6);
-    // Local "face" direction is +X; rotate to face the doorway (−Z), plus a
-    // further 90° as requested.
-    pet.rotation.y = Math.PI;
-    group.add(pet);
-  }
-
-  // ---- Shuttle vehicle, to the right of the building (+X) ----
-  if (opts.airportShuttle) {
-    const kind = shuttleKindForHotelType(hotelType);
-    const carLength = Math.max(halfWidth, halfDepth) * (kind === "limo" ? 0.85 : 0.6);
-    const car = buildLowPolyCar(kind, carLength);
-    car.position.set(halfWidth + carGap + carLength / 2, baseY, 0);
-    car.rotation.y = Math.PI / 2;
-    group.add(car);
-  }
-
-  return group;
+function disposeEntry(entry: ModelEntry, allMaterials: Set<THREE.MeshStandardMaterial>) {
+  entry.materials.forEach((m) => allMaterials.delete(m));
+  disposeObject(entry.scaleGroup);
 }
 
 /**
  * Minimal Three.js building preview: loads an FBX from the asset pack onto a
  * transparent canvas so it appears to sit directly on the page (no panel or
- * background), standing on a rectangular floor with optional amenity-driven
- * set dressing (pool, pet, airport shuttle — see buildGroundDecor). The
- * specific building is chosen from the selected hotel type, and swaps when
- * that changes. The camera auto-fits the *building's* bounding box on load
- * and on every resize (the ground decor is deliberately not included in that
- * fit, so it extends toward/past the frame edges like real ground rather
- * than shrinking the building to fit the extra geometry).
+ * background), standing on a rectangular floor with amenity-driven set
+ * dressing (see groundDecor.ts). The specific building is chosen from the
+ * selected hotel type; switching it dissolves (crossfades) between the old
+ * and new model rather than a hard cut. Rooms smoothly scale the building
+ * (mostly vertical); modernity restyles its material. The camera auto-fits
+ * the *building's* bounding sphere against a reference box (see
+ * updateCamera), interpolated across a transition, on load, and on every
+ * resize; the render canvas itself extends past that box so ground decor
+ * (pool, parking, shuttle) isn't cropped.
  */
 export function SandboxModel({
   hotelType,
-  hasPool,
-  petFriendly,
-  airportShuttle,
-  parking,
-  evCharging,
-}: {
-  hotelType: HotelConfigPayload["hotelType"];
-  hasPool: boolean;
-  petFriendly: boolean;
-  airportShuttle: boolean;
-  parking: boolean;
-  evCharging: boolean;
-}) {
+  rooms,
+  modernity,
+  amenities,
+}: Pick<HotelConfigPayload, "hotelType" | "rooms" | "modernity" | "amenities">) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const modelSrc = modelUrl(modelForHotelType(hotelType));
 
-  // Bridges the amenity toggles (which must NOT reload the FBX or reset the
-  // scene) into the heavy setup effect below, which only reruns when the
-  // model itself changes.
+  const hasPool = amenities.includes("pool");
+  const petFriendly = amenities.includes("pet_friendly");
+  const airportShuttle = amenities.includes("airport_shuttle");
+  const hasParking = amenities.includes("parking");
+  const hasEvCharging = amenities.includes("ev_charging");
+  const hasPatioDining = amenities.includes("restaurant") || amenities.includes("bar");
+  const hasConferenceCanopy = amenities.includes("conference_rooms");
+  const hasSpa = amenities.includes("spa");
+
+  // Bridges values that must NOT reload the FBX or reset the scene (amenity
+  // toggles, rooms, modernity, hotelType-for-shuttle-kind) into the mount
+  // effect's animate loop / the model-load effect, which only reruns when
+  // the model source itself changes.
+  const hotelTypeRef = useRef(hotelType);
+  hotelTypeRef.current = hotelType;
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
+  const modernityRef = useRef(modernity);
+  modernityRef.current = modernity;
   const hasPoolRef = useRef(hasPool);
   hasPoolRef.current = hasPool;
   const petFriendlyRef = useRef(petFriendly);
   petFriendlyRef.current = petFriendly;
   const airportShuttleRef = useRef(airportShuttle);
   airportShuttleRef.current = airportShuttle;
-  const parkingRef = useRef(parking);
-  parkingRef.current = parking;
-  const evChargingRef = useRef(evCharging);
-  evChargingRef.current = evCharging;
-  const syncDecorRef = useRef<(() => void) | null>(null);
+  const hasParkingRef = useRef(hasParking);
+  hasParkingRef.current = hasParking;
+  const hasEvChargingRef = useRef(hasEvCharging);
+  hasEvChargingRef.current = hasEvCharging;
+  const hasPatioDiningRef = useRef(hasPatioDining);
+  hasPatioDiningRef.current = hasPatioDining;
+  const hasConferenceCanopyRef = useRef(hasConferenceCanopy);
+  hasConferenceCanopyRef.current = hasConferenceCanopy;
+  const hasSpaRef = useRef(hasSpa);
+  hasSpaRef.current = hasSpa;
 
+  const pivotRef = useRef<THREE.Group | null>(null);
+  const decorGroupRef = useRef<THREE.Group | null>(null);
+  const footprintRef = useRef<Footprint | null>(null);
+  const activeEntryRef = useRef<ModelEntry | null>(null);
+  const transitionRef = useRef<TransitionState | null>(null);
+  const loadTokenRef = useRef(0);
+  const allMaterialsRef = useRef<Set<THREE.MeshStandardMaterial>>(new Set());
+
+  function syncDecor() {
+    const pivot = pivotRef.current;
+    const footprint = footprintRef.current;
+    if (!pivot || !footprint) return;
+    const prev = decorGroupRef.current;
+    if (prev) {
+      pivot.remove(prev);
+      disposeObject(prev);
+    }
+    const nextDecor = buildGroundDecor(footprint, hotelTypeRef.current, {
+      hasPool: hasPoolRef.current,
+      petFriendly: petFriendlyRef.current,
+      airportShuttle: airportShuttleRef.current,
+      hasParking: hasParkingRef.current,
+      hasEvCharging: hasEvChargingRef.current,
+      hasPatioDining: hasPatioDiningRef.current,
+      hasConferenceCanopy: hasConferenceCanopyRef.current,
+      hasSpa: hasSpaRef.current,
+    });
+    pivot.add(nextDecor);
+    decorGroupRef.current = nextDecor;
+  }
+
+  // ---- Mount effect: scene, camera, renderer, lights, animate loop, resize.
+  // Runs once; persists across hotelType/rooms/modernity/amenity changes so
+  // those never tear down the canvas. ----
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
@@ -494,7 +293,6 @@ export function SandboxModel({
     const height = el.clientHeight || rect.height || 400;
 
     const scene = new THREE.Scene(); // no background → transparent
-
     const camera = new THREE.PerspectiveCamera(BASE_FOV, width / height, 0.1, 5000);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -510,14 +308,71 @@ export function SandboxModel({
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
     renderer.domElement.style.display = "block";
+    renderer.domElement.style.cursor = "grab";
+    renderer.domElement.style.touchAction = "none";
+    // The mount div disables pointer events (so the overflow area spilling
+    // past the layout cell doesn't steal clicks from UI below it) — the
+    // canvas re-enables them on itself so drag/wheel orbit still works.
+    renderer.domElement.style.pointerEvents = "auto";
+
+    // Camera orbit state. Auto-rotates (azimuth) until the user clicks/drags,
+    // then stops for good; free dragging in any direction thereafter orbits
+    // both azimuth and elevation; wheel zooms. Initialized from the same
+    // fixed direction the camera used to sit at, so the default framing is
+    // unchanged.
+    const initialDir = new THREE.Vector3(1, 0.55, 1).normalize();
+    let azimuth = Math.atan2(initialDir.x, initialDir.z);
+    let elevation = Math.asin(initialDir.y);
+    let zoom = 1;
+
+    let autoRotate = true;
+    let isDragging = false;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+
+    function onPointerDown(e: PointerEvent) {
+      autoRotate = false;
+      isDragging = true;
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+      renderer.domElement.style.cursor = "grabbing";
+      renderer.domElement.setPointerCapture(e.pointerId);
+    }
+    function onPointerMove(e: PointerEvent) {
+      if (!isDragging) return;
+      const dx = e.clientX - lastPointerX;
+      const dy = e.clientY - lastPointerY;
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+      azimuth += dx * DRAG_ORBIT_SPEED;
+      elevation = THREE.MathUtils.clamp(
+        elevation - dy * DRAG_ORBIT_SPEED,
+        ELEVATION_MIN,
+        ELEVATION_MAX,
+      );
+    }
+    function onPointerUp(e: PointerEvent) {
+      isDragging = false;
+      renderer.domElement.style.cursor = "grab";
+      if (renderer.domElement.hasPointerCapture(e.pointerId)) {
+        renderer.domElement.releasePointerCapture(e.pointerId);
+      }
+    }
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      zoom = THREE.MathUtils.clamp(zoom + e.deltaY * ZOOM_WHEEL_SPEED, ZOOM_MIN, ZOOM_MAX);
+    }
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onPointerUp);
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
     // Low ambient keeps unlit faces dark (deeper shadows); the key light lifts
     // the lit faces; the fill stops the shadow side going fully black.
     const ambient = new THREE.AmbientLight(0xffffff, LIGHT.ambient);
     scene.add(ambient);
     const key = new THREE.DirectionalLight(0xffffff, LIGHT.key);
-    // Place the key light on a sphere around the model from the compass
-    // (azimuth) and height (elevation) angles; it aims at the origin.
     const az = THREE.MathUtils.degToRad(LIGHT.azimuth);
     const elev = THREE.MathUtils.degToRad(LIGHT.elevation);
     const r = 6;
@@ -531,68 +386,55 @@ export function SandboxModel({
     fill.position.set(-2, 1, -1.5);
     scene.add(fill);
 
-    // Model radius, set once loaded; drives the auto-fit distance.
-    let modelRadius = 1;
-    let model: THREE.Group | null = null;
-    let decorGroup: THREE.Group | null = null;
-    let footprint: Footprint | null = null;
-    // Rotating the model around its own origin spins it in a wide arc (the
-    // geometry sits far from that origin). Parent it under a pivot at the world
-    // origin and offset the model so its center lands on the pivot — rotating
-    // the pivot then spins around the building's center. The ground decor is
-    // parented under the same pivot so it spins together as one turntable,
-    // keeping the pool/pet/car fixed relative to the building as it rotates.
+    // Static parent group at the world origin holding the model + ground
+    // decor together (the entry's scaleGroup centers the model on it) — it no
+    // longer rotates itself; the camera orbits around it instead (see
+    // azimuth/elevation above), which is what lets a vertical drag tilt the
+    // view without tilting the ground along with it.
     const pivot = new THREE.Group();
     scene.add(pivot);
+    pivotRef.current = pivot;
 
-    function syncDecor() {
-      if (!footprint) return;
-      if (decorGroup) {
-        pivot.remove(decorGroup);
-        disposeObject(decorGroup);
-      }
-      decorGroup = buildGroundDecor(footprint, hotelType, {
-        hasPool: hasPoolRef.current,
-        petFriendly: petFriendlyRef.current,
-        airportShuttle: airportShuttleRef.current,
-        parking: parkingRef.current,
-        evCharging: evChargingRef.current,
-      });
-      pivot.add(decorGroup);
-    }
-    syncDecorRef.current = syncDecor;
-
-    // Frame the model against the *reference box* (the visible layout cell,
-    // = the mount's parent), then render into the larger mount canvas without
-    // changing the building's size or on-screen position. The building stays
-    // fit to the reference box exactly as before; the extra canvas area to the
-    // bottom/right simply reveals ground decor that used to be cropped.
-    function fitCamera() {
+    // Reference box (the visible layout cell = the mount's parent) vs. the
+    // actual, larger render canvas (the mount itself, extended past the cell
+    // by SCENE_EXTEND_RIGHT/BOTTOM). Cached here and refreshed on resize
+    // rather than read from the DOM every frame.
+    let refW = width;
+    let refH = height;
+    let renderW = width;
+    let renderH = height;
+    function measure() {
       const parent = el.parentElement;
-      const refW = parent?.clientWidth || el.clientWidth || 1;
-      const refH = parent?.clientHeight || el.clientHeight || 1;
-      const renderW = el.clientWidth || refW;
-      const renderH = el.clientHeight || refH;
+      refW = parent?.clientWidth || el.clientWidth || 1;
+      refH = parent?.clientHeight || el.clientHeight || 1;
+      renderW = el.clientWidth || refW;
+      renderH = el.clientHeight || refH;
+    }
+    measure();
 
-      // Distance from the reference framing — unchanged from before, so the
-      // building's size and framing match the original layout box.
+    // Frame the model against the reference box, then render into the larger
+    // mount canvas without changing the building's size or on-screen
+    // position: distance/orbit/zoom are computed from the reference framing
+    // (unchanged from before), and the frustum is widened + offset to cover
+    // the extra render width/height so the added area simply reveals ground
+    // decor that used to be cropped, instead of shrinking the building.
+    function updateCamera(radius: number) {
       const baseFov = (BASE_FOV * Math.PI) / 180;
       const refAspect = refW / refH;
-      const fitH = modelRadius / Math.sin(baseFov / 2);
+      const fitH = radius / Math.sin(baseFov / 2);
       const fitW = fitH / Math.min(1, refAspect);
-      const distance = 1.25 * Math.max(fitH, fitW);
-      const dir = new THREE.Vector3(1, 0.55, 1).normalize();
+      const distance = 1.25 * Math.max(fitH, fitW) * zoom;
+      const dir = new THREE.Vector3(
+        Math.cos(elevation) * Math.sin(azimuth),
+        Math.sin(elevation),
+        Math.cos(elevation) * Math.cos(azimuth),
+      );
       camera.position.copy(dir.multiplyScalar(distance));
       camera.near = distance / 100;
       camera.far = distance * 100;
       camera.lookAt(0, 0, 0);
 
-      // Widen the frustum to cover the extra render width/height, and offset it
-      // so the reference-sized region stays anchored to the mount's top-left.
-      // This keeps the building pinned in place at its original size while the
-      // added bottom/right area extends the visible scene.
-      const fovFull =
-        2 * Math.atan(Math.tan(baseFov / 2) * (renderH / refH));
+      const fovFull = 2 * Math.atan(Math.tan(baseFov / 2) * (renderH / refH));
       camera.fov = (fovFull * 180) / Math.PI;
       camera.aspect = renderW / renderH;
       camera.setViewOffset(
@@ -606,55 +448,50 @@ export function SandboxModel({
       camera.updateProjectionMatrix();
     }
 
-    new FBXLoader().load(
-      modelSrc,
-      (object) => {
-        if (disposed) return;
-        object.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          // No texture map → a plain, brightish neutral-grey material, so the
-          // buildings render monochrome with lighting/shading only (no colour).
-          // Lower roughness sharpens the light falloff for more definition.
-          mesh.material = new THREE.MeshStandardMaterial({
-            color: 0xe4e4e4,
-            roughness: 0.65,
-            metalness: 0,
-          });
-        });
-
-        // Offset the model within the pivot so its center sits on the pivot's
-        // origin (0,0,0), then record its bounding sphere for the auto-fit.
-        const box = new THREE.Box3().setFromObject(object);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        object.position.sub(center);
-        const sphere = box.getBoundingSphere(new THREE.Sphere());
-        modelRadius = sphere.radius || 1;
-
-        model = object;
-        pivot.add(object);
-        fitCamera();
-
-        footprint = {
-          halfWidth: Math.max(size.x / 2, 0.01),
-          halfDepth: Math.max(size.z / 2, 0.01),
-          baseY: -size.y / 2,
-          height: Math.max(size.y, 0.01),
-        };
-        syncDecor();
-      },
-      undefined,
-      (err) => {
-        // eslint-disable-next-line no-console
-        console.warn("Failed to load building model", err);
-      },
-    );
+    let currentRadius = 1;
 
     function animate() {
       if (disposed) return;
       frame = requestAnimationFrame(animate);
-      pivot.rotation.y += 0.005;
+      if (autoRotate) azimuth += AUTO_ROTATE_SPEED;
+
+      const transition = transitionRef.current;
+      let displayRadius = activeEntryRef.current?.radius ?? currentRadius;
+
+      if (transition) {
+        const elapsed = performance.now() - transition.start;
+        const p = Math.min(1, elapsed / transition.duration);
+        const eased = easeInOutCubic(p);
+
+        if (transition.from) {
+          setOpacity(transition.from, 1 - eased);
+          displayRadius = THREE.MathUtils.lerp(transition.from.radius, transition.to.radius, eased);
+        } else {
+          displayRadius = transition.to.radius;
+        }
+        setOpacity(transition.to, eased);
+
+        if (p >= 1) {
+          setOpacity(transition.to, 1);
+          if (transition.from) {
+            pivot.remove(transition.from.scaleGroup);
+            disposeEntry(transition.from, allMaterialsRef.current);
+          }
+          activeEntryRef.current = transition.to;
+          transitionRef.current = null;
+        }
+      }
+
+      const targetScale = computeRoomsScale(roomsRef.current);
+      if (transitionRef.current) {
+        applyScaleLerp(transitionRef.current.to, targetScale);
+        if (transitionRef.current.from) applyScaleLerp(transitionRef.current.from, targetScale);
+      } else {
+        applyScaleLerp(activeEntryRef.current, targetScale);
+      }
+
+      currentRadius = displayRadius;
+      updateCamera(displayRadius);
       renderer.render(scene, camera);
     }
     animate();
@@ -663,8 +500,8 @@ export function SandboxModel({
       const w = el.clientWidth || 1;
       const h = el.clientHeight || 1;
       renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      fitCamera();
+      measure();
+      updateCamera(currentRadius);
     }
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(el);
@@ -674,23 +511,125 @@ export function SandboxModel({
       disposed = true;
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
-      syncDecorRef.current = null;
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onPointerUp);
+      renderer.domElement.removeEventListener("wheel", onWheel);
+
+      const transition = transitionRef.current;
+      if (transition) {
+        if (transition.from) disposeEntry(transition.from, allMaterialsRef.current);
+        disposeEntry(transition.to, allMaterialsRef.current);
+        transitionRef.current = null;
+      } else if (activeEntryRef.current) {
+        disposeEntry(activeEntryRef.current, allMaterialsRef.current);
+      }
+      activeEntryRef.current = null;
+
+      if (decorGroupRef.current) disposeObject(decorGroupRef.current);
+      decorGroupRef.current = null;
+      pivotRef.current = null;
+      footprintRef.current = null;
+
       scene.remove(pivot);
-      if (model) disposeObject(model);
-      if (decorGroup) disposeObject(decorGroup);
       renderer.dispose();
       renderer.forceContextLoss();
       if (renderer.domElement.parentNode === el) {
         el.removeChild(renderer.domElement);
       }
     };
-  }, [modelSrc, hotelType]);
+  }, []);
 
-  // Toggling an amenity rebuilds only the ground-decor group, via the ref the
-  // heavy effect above wired up — no FBX reload, no scene reset.
+  // ---- Model-load effect: loads the FBX for the current hotelType and
+  // starts a dissolve transition against whatever's currently active. ----
   useEffect(() => {
-    syncDecorRef.current?.();
-  }, [hasPool, petFriendly, airportShuttle, parking, evCharging]);
+    loadTokenRef.current += 1;
+    const myToken = loadTokenRef.current;
+    let cancelled = false;
+
+    new FBXLoader().load(
+      modelSrc,
+      (object) => {
+        if (cancelled || myToken !== loadTokenRef.current) {
+          disposeObject(object);
+          return;
+        }
+        const pivot = pivotRef.current;
+        if (!pivot) {
+          disposeObject(object);
+          return;
+        }
+
+        const newEntry = buildEntry(
+          object,
+          modernityRef.current,
+          roomsRef.current,
+          allMaterialsRef.current,
+        );
+
+        // A hotelType change arriving mid-transition: snap the in-flight one
+        // to its end state first, rather than stacking a 3-way interpolation.
+        const inFlight = transitionRef.current;
+        if (inFlight) {
+          if (inFlight.from) {
+            pivot.remove(inFlight.from.scaleGroup);
+            disposeEntry(inFlight.from, allMaterialsRef.current);
+          }
+          setOpacity(inFlight.to, 1);
+          activeEntryRef.current = inFlight.to;
+          transitionRef.current = null;
+        }
+
+        pivot.add(newEntry.scaleGroup);
+        transitionRef.current = {
+          from: activeEntryRef.current,
+          to: newEntry,
+          start: performance.now(),
+          duration: activeEntryRef.current ? SWAP_DURATION_MS : FIRST_LOAD_DURATION_MS,
+        };
+
+        footprintRef.current = newEntry.footprint;
+        syncDecor();
+      },
+      undefined,
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to load building model", err);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelSrc]);
+
+  // ---- Modernity changes restyle already-loaded materials directly; no
+  // reload, no per-frame animation needed (a material tweak isn't a pop). ----
+  useEffect(() => {
+    const { color, roughness } = materialParamsForModernity(modernity);
+    allMaterialsRef.current.forEach((m) => {
+      m.color.copy(color);
+      m.roughness = roughness;
+    });
+  }, [modernity]);
+
+  // ---- Amenity toggles rebuild only the ground-decor group, via the ref the
+  // mount effect wired up — no FBX reload, no scene reset. ----
+  useEffect(() => {
+    syncDecor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    hasPool,
+    petFriendly,
+    airportShuttle,
+    hasParking,
+    hasEvCharging,
+    hasPatioDining,
+    hasConferenceCanopy,
+    hasSpa,
+  ]);
 
   // Outer box is the reference framing (the layout cell). The inner mount is
   // the actual render canvas, sized larger so it spills past the box to the
