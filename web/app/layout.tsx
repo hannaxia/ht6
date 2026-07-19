@@ -1,7 +1,6 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { AIConsultantProvider } from "../contexts/AIConsultantContext";
 import { SessionProvider } from "../contexts/SessionContext";
 import { AuthNav, SiteNav } from "../components/shared/AuthNav";
 import { auth0 } from "../lib/auth0";
@@ -54,9 +53,7 @@ export default async function RootLayout({
           </div>
         </header>
         <SessionProvider initialSessionId={session?.user.sub}>
-          <AIConsultantProvider>
-            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-          </AIConsultantProvider>
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </SessionProvider>
       </body>
     </html>
