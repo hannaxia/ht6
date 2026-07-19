@@ -40,15 +40,15 @@ const LOCATION_SIGNALS = [
 const DATA_SOURCES = [
   {
     title: "Stay22",
-    body: "The sole real-world market source: hotel inventory, coordinates, prices, ratings, amenities, and booking links. To keep the map fast and within Stay22's rate limits, inventory is scraped ahead of time into our database rather than fetched live on every page load. Stay22 does not provide revenue, occupancy, or profit — those are always our own predictions.",
+    body: "The sole real-world market source: hotel names, coordinates, ratings, amenities, and booking links. Prices are an average nightly rate — Stay22 returns a total for a 30-night stay, which we divide by the number of nights. Because availability varies by date, we query two 30-night windows (roughly 30 and 60 days out) and merge them by property, keeping the nearer window's price. Up to 300 properties are pulled per area, 50 per request. Inventory is scraped into our database ahead of time rather than fetched live on each load, staying within Stay22's 150 requests/minute limit. Stay22 provides no revenue, occupancy, or profit data — those are always our own predictions.",
   },
   {
     title: "Web scraping & open geodata",
-    body: "Our scrape job populates major Canadian cities plus 300+ Ontario towns. The town list was generated from GeoNames' free Canada gazetteer. Location context scores (tourism, business, transit, density) are seeded into a Locations collection.",
+    body: "The scrape job covers ~20 major Canadian cities plus 300+ Ontario towns; the town list was generated from GeoNames' free Canada gazetteer. Per-area location scores (tourism, business, transit, and density) are seeded into a Locations collection.",
   },
   {
     title: "Kaggle & public datasets (ML models)",
-    body: "The occupancy and ADR predictors are trained on a North-American short-term-rental listings dataset. A separate hotel-reviews dataset trains the rating-impact model, which estimates how amenity and quality changes move guest satisfaction. These datasets are US-heavy, so predictions are directional estimates, not Canada-specific guarantees.",
+    body: "The occupancy and ADR predictors train on a North-American short-term-rental dataset of 70,000+ listings — but it's ~72% US and only ~9% Canadian, so predictions are directional, not Canada-specific. Amenity effects are modeled for the 8 of 15 amenities that carry real statistical signal (e.g. wifi, parking, pool); the rest use hand-tuned values. A separate US hotel-reviews dataset trains the rating model, which scores 14 guest-experience aspects extracted from review text.",
   },
 ];
 

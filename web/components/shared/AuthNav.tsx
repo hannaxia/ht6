@@ -20,9 +20,7 @@ export async function AuthNav() {
     <nav className="flex items-center gap-4 text-sm" aria-label="Account">
       {session ? (
         <>
-          <NavLink href="/profile">
-            {session.user.name ?? session.user.email ?? "Profile"}
-          </NavLink>
+          <NavLink href="/profile">Profile</NavLink>
           <a
             href="/auth/logout"
             className="rounded border border-slate-300 bg-white px-3 py-1.5 font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
