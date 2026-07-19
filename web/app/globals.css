@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* App-wide body font. Titles opt into their own display face (Lexend Deca). */
+body {
+  font-family: "Google Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-variation-settings: "GRAD" 0;
+}
+
 /* Text selection ("highlight by the cursor") uses the sage accent app-wide. */
 ::selection { background: #6f9c7f; color: #fff; }
 
@@ -36,5 +44,11 @@
 .landing-hero h1 { margin: 0; font-family: "Lexend Deca", sans-serif; font-optical-sizing: auto; font-style: normal; font-size: clamp(3.7rem, 7.2vw, 7.4rem); font-weight: 400; line-height: .88; letter-spacing: -.055em; }
 .landing-hero h1 .landing-i { color: #db3330; }
 .landing-hero h1 em { display: inline-block; margin-top: -.3em; color: #6f9c7f; font-family: "Lexend Deca", sans-serif; font-optical-sizing: auto; font-style: normal; font-size: .34em; font-weight: 400; line-height: .94; letter-spacing: normal; }
+.landing-cta { display: inline-flex; align-items: center; gap: .55rem; margin-top: 2.25rem; padding: .85rem 2rem; border-radius: .25rem; background: #6f9c7f; color: #fff; font-size: 1.05rem; font-weight: 500; letter-spacing: .01em; text-decoration: none; transition: background .15s ease, transform .15s ease; }
+.landing-cta:hover { background: #5f8a6f; transform: translateY(-1px); }
+.landing-cta:hover .landing-cta-arrow { transform: translateX(3px); }
+.landing-cta:active { transform: translateY(0); }
+.landing-cta:focus-visible { outline: 3px solid #db3330; outline-offset: 3px; }
+.landing-cta-arrow { display: inline-block; font-size: 1.15em; line-height: 1; transition: transform .15s ease; }
 @media (max-width: 700px) { .landing-hero { display: flex; min-height: 100%; flex-direction: column; justify-content: flex-end; padding: 6rem 1.5rem 4rem; } .landing-hero h1 { font-size: clamp(3.4rem,17vw,5.5rem); } .landing-atmosphere { background: linear-gradient(0deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.68) 70%, transparent 100%); } .fallback-cn-tower { right: 10%; height: 76%; } .fallback-buildings { width: 100%; height: 35%; } }
 @media (prefers-reduced-motion: reduce) { .landing-skyline-fallback { transition: none; } }
