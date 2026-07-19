@@ -108,7 +108,21 @@ export default function SandboxPage() {
   // On mount, pick up a config handed off from Market Discovery (selecting an
   // existing hotel or dropping a new-hotel pin). Falls back to DEFAULT_CONFIG
   // for a direct visit to /sandbox.
+  //
+  // Guards against React 18 Strict Mode's dev-mode double effect invocation:
+  // consumeSandboxHandoff() is destructive (reads sessionStorage, then
+  // deletes the key), so without this guard the second invocation would find
+  // nothing, fall into the "no handoff" branch, and stomp the first
+  // invocation's correct name/investment-mode back to the "New hotel" /
+  // new_build defaults — exactly the bug where an existing hotel's real name
+  // and upgrade-vs-new-build distinction silently reverted after landing on
+  // this page. See app/discover/page.tsx's `cancelled` flag for the same
+  // class of bug guarded a different way (that one's about a stale async
+  // result winning; this one's about a stateful read-once resource).
+  const handoffConsumedRef = useRef(false);
   useEffect(() => {
+    if (handoffConsumedRef.current) return;
+    handoffConsumedRef.current = true;
     const handoff = consumeSandboxHandoff();
     if (handoff) {
       setConfig(handoff.config);
@@ -196,7 +210,7 @@ export default function SandboxPage() {
   }
 
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-6 py-8">
+    <main className="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-3 px-6 py-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold">
@@ -300,8 +314,11 @@ export default function SandboxPage() {
         </div>
 
         {/* Right column: seamless 3D building (transparent, no panel). Wider
-            than the text column and auto-fit so the model is never clipped. */}
-        <div className="min-h-[420px] lg:min-h-[560px]">
+            than the text column and auto-fit so the model is never clipped.
+            Nudged up (-mt) and shorter (min-h) than earlier so the model
+            starts in line with the left column's "Configuration" heading
+            and the whole page fits without scrolling on typical viewports. */}
+        <div className="-mt-8 min-h-[340px] lg:min-h-[420px]">
           <SandboxModel
             hotelType={config.hotelType}
             hasPool={config.amenities.includes("pool")}
@@ -314,8 +331,9 @@ export default function SandboxPage() {
       </div>
       {/* Break out of the max-w-7xl main and re-align to the header's
           max-w-6xl container so the button's right edge matches Log out.
-          Positioned above the 3D scene, which overflows its cell downward. */}
-      <div className="relative z-10 -mx-6">
+          Positioned above the 3D scene, which overflows its cell downward.
+          Nudged up (-mt) to move with the 3D column above. */}
+      <div className="relative z-10 -mx-6 -mt-8">
         <div className="mx-auto flex w-full max-w-6xl justify-end px-6">
           {isAuthenticated ? (
             <button

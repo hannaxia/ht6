@@ -3,6 +3,7 @@
 import type { SavedHotel, Stay22Hotel } from "../../lib/api/schemas";
 import type { PlacedPin } from "./DiscoverMap";
 import { priceCad, titleCase } from "../../lib/format";
+import { SavedHotelPreview } from "../sandbox/SavedHotelPreview";
 
 /**
  * Right-hand panel over the fullscreen map. Shows details for a selected
@@ -110,6 +111,10 @@ function SavedDetails({ saved }: { saved: SavedHotel }) {
   const { config, metrics } = saved;
   return (
     <div className="space-y-3 text-sm">
+      <div className="h-32 w-full overflow-hidden rounded bg-slate-100">
+        <SavedHotelPreview config={config} />
+      </div>
+
       <div>
         <p className="font-semibold text-slate-900">{saved.name}</p>
         <p className="text-xs text-red-600">Your saved hotel</p>

@@ -13,6 +13,15 @@ export interface HotelDoc {
   amenities: string[];
   images: string[];
   coordinates: { type: "Point"; coordinates: [number, number] };
+  /**
+   * Total room/unit count. Stay22 does not provide this (verified — not in
+   * its accommodations response), so it's populated lazily on first
+   * "Configure" click via a one-shot Gemini lookup (api/src/ai/roomLookup.ts)
+   * and cached here to avoid repeat LLM calls. Undefined until looked up;
+   * a failed/unconfident lookup is never cached (left undefined) so it can
+   * be retried later rather than permanently stuck on a guess.
+   */
+  rooms?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +42,7 @@ export const HotelSchema = new Schema<HotelDoc>(
     },
     amenities: { type: [String], default: [] },
     images: { type: [String], default: [] },
+    rooms: { type: Number, min: 1 },
     coordinates: {
       type: { type: String, enum: ["Point"], required: true },
       coordinates: {

@@ -194,11 +194,25 @@ export default function DiscoverPage() {
   async function configureExistingHotel() {
     if (!selectedHotel || configuring) return;
     setConfiguring(true);
-    const config = await enrichWithContext(
-      hotelToConfig(selectedHotel),
-      selectedHotel.coordinates,
-      { excludeHotelId: selectedHotel.id, keepBasePrice: !!selectedHotel.price },
-    );
+    // Room count isn't something Stay22 provides — run alongside the market
+    // context lookup rather than after it, so this doesn't add extra
+    // latency on top of an already-async step. Best-effort: a failed/
+    // unconfident lookup (network error, or Gemini not configured) just
+    // leaves the config's default room count untouched.
+    const [config, roomEstimate] = await Promise.all([
+      enrichWithContext(hotelToConfig(selectedHotel), selectedHotel.coordinates, {
+        excludeHotelId: selectedHotel.id,
+        keepBasePrice: !!selectedHotel.price,
+      }),
+      hotelsApi.estimateRooms(selectedHotel.id).catch((err) => {
+        const code = err instanceof ApiError ? err.errorCode : "internal_error";
+        log.warn("room estimate lookup failed; using default room count", code);
+        return null;
+      }),
+    ]);
+    if (roomEstimate?.rooms) {
+      config.rooms = roomEstimate.rooms;
+    }
     storeSandboxHandoff({
       label: selectedHotel.name,
       origin: "existing",

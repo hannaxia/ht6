@@ -40,7 +40,7 @@ export const DEFAULT_CONFIG: HotelConfigPayload = {
   rooms: 150,
   stars: 4,
   modernity: 0.7,
-  amenities: ["wifi", "breakfast"],
+  amenities: [],
   targetSegment: "mixed",
   basePrice: 180,
   segmentAdrNorm: 200,

@@ -30,3 +30,11 @@ export const hotelsListResponseSchema = z.object({
   hotels: z.array(stay22HotelSchema),
   source: z.literal("Stay22"),
 });
+
+export const roomEstimateResponseSchema = z.object({
+  rooms: z.number().int().positive().nullable(),
+  // "cached" = already stored from a prior lookup; "estimated" = a fresh
+  // confident Gemini answer just cached; "unknown" = no confident answer
+  // (nothing cached, retryable later).
+  source: z.enum(["cached", "estimated", "unknown"]),
+});

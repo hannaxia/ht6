@@ -40,6 +40,11 @@ export const hotelsListResponseSchema = z.object({
   source: z.literal("Stay22"),
 });
 
+export const roomEstimateResponseSchema = z.object({
+  rooms: z.number().int().positive().nullable(),
+  source: z.enum(["cached", "estimated", "unknown"]),
+});
+
 export const simulateHotelOutputSchema = z.object({
   adr: z.number(),
   occupancy: z.number(),
