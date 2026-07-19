@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DiscussionPanel } from "../../components/sandbox/DiscussionPanel";
 import { MetricsPanel } from "../../components/sandbox/MetricsPanel";
@@ -55,6 +56,9 @@ export default function SandboxPage() {
   // handoff, so we never fire a throwaway simulation for the default config
   // (which the in-flight debouncer could let win over the real handoff).
   const [handoffResolved, setHandoffResolved] = useState(false);
+  // React Strict Mode replays mount effects in development. This guard keeps
+  // the one-time Discovery handoff from being consumed twice.
+  const handoffInitializedRef = useRef(false);
   const [metrics, setMetrics] = useState<SimulateHotelOutput | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const debouncer = useRef(
@@ -110,20 +114,9 @@ export default function SandboxPage() {
   // existing hotel or dropping a new-hotel pin). Falls back to DEFAULT_CONFIG
   // for a direct visit to /sandbox.
   //
-  // Guards against React 18 Strict Mode's dev-mode double effect invocation:
-  // consumeSandboxHandoff() is destructive (reads sessionStorage, then
-  // deletes the key), so without this guard the second invocation would find
-  // nothing, fall into the "no handoff" branch, and stomp the first
-  // invocation's correct name/investment-mode back to the "New hotel" /
-  // new_build defaults — exactly the bug where an existing hotel's real name
-  // and upgrade-vs-new-build distinction silently reverted after landing on
-  // this page. See app/discover/page.tsx's `cancelled` flag for the same
-  // class of bug guarded a different way (that one's about a stale async
-  // result winning; this one's about a stateful read-once resource).
-  const handoffConsumedRef = useRef(false);
   useEffect(() => {
-    if (handoffConsumedRef.current) return;
-    handoffConsumedRef.current = true;
+    if (handoffInitializedRef.current) return;
+    handoffInitializedRef.current = true;
     const handoff = consumeSandboxHandoff();
     if (handoff) {
       setConfig(handoff.config);
@@ -213,54 +206,105 @@ export default function SandboxPage() {
   return (
     <main className="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-3 px-6 py-5">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold">
-            Hotel Sandbox
-            {hotelLabel ? (
-              <>
-                {editingName ? (
-                  <input
-                    type="text"
-                    autoFocus
-                    value={nameDraft}
-                    onChange={(e) => setNameDraft(e.target.value)}
-                    onBlur={confirmName}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") confirmName();
-                      if (e.key === "Escape") setEditingName(false);
-                    }}
-                    className="w-48 rounded border border-slate-300 px-2 py-1 text-sm font-normal focus:border-slate-500 focus:outline-none"
-                  />
-                ) : (
-                  <span className="text-slate-400">— {hotelLabel}</span>
-                )}
-                {isCustom && !editingName ? (
-                  <button
-                    type="button"
-                    onClick={startEditingName}
-                    aria-label="Rename hotel"
-                    title="Rename hotel"
-                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      className="h-4 w-4"
+        <div className="flex items-start gap-3">
+          <Link
+            href="/discover"
+            aria-label="Back to discovery"
+            title="Back to discovery"
+            className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 transition-colors hover:border-accent hover:bg-accent hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+          </Link>
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-bold">
+              Hotel Sandbox
+              {hotelLabel ? (
+                <>
+                  {editingName ? (
+                    <input
+                      type="text"
+                      autoFocus
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onBlur={confirmName}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") confirmName();
+                        if (e.key === "Escape") setEditingName(false);
+                      }}
+                      className="w-48 rounded border border-slate-300 px-2 py-1 text-sm font-normal focus:border-slate-500 focus:outline-none"
+                    />
+                  ) : (
+                    <span className="text-slate-400">— {hotelLabel}</span>
+                  )}
+                  {isCustom && !editingName ? (
+                    <button
+                      type="button"
+                      onClick={startEditingName}
+                      aria-label="Rename hotel"
+                      title="Rename hotel"
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                     >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                    </svg>
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-          </h1>
-          <p className="text-sm text-slate-600">
-            Configure a hotel and watch the estimated metrics update. All
-            values are simulation estimates.
-          </p>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        className="h-4 w-4"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                      </svg>
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+            </h1>
+            <p className="text-sm text-slate-600">
+              Configure a hotel and watch the estimated metrics update. All
+              values are simulation estimates.
+            </p>
+          </div>
+        </div>
+        <div className="shrink-0 pl-4">
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={
+                saveStatus === "saving" ||
+                (hotelLabel ?? "").trim().length === 0
+              }
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:hover:border-slate-200 disabled:hover:bg-slate-100 disabled:hover:text-slate-400"
+            >
+              {saveStatus === "saving"
+                ? "Saving…"
+                : saveStatus === "saved"
+                  ? "Saved ✓"
+                  : savedHotelId
+                    ? "Update"
+                    : "Save"}
+            </button>
+          ) : (
+            <a
+              href="/auth/login?returnTo=/sandbox"
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white"
+              title="Log in to save this hotel to your profile"
+            >
+              Log in to save
+            </a>
+          )}
         </div>
       </div>
 
@@ -335,41 +379,6 @@ export default function SandboxPage() {
             parking={config.amenities.includes("parking")}
             evCharging={config.amenities.includes("ev_charging")}
           />
-        </div>
-      </div>
-      {/* Break out of the max-w-7xl main and re-align to the header's
-          max-w-6xl container so the button's right edge matches Log out.
-          Positioned above the 3D scene, which overflows its cell downward.
-          Nudged up (-mt) to move with the 3D column above. */}
-      <div className="relative z-10 -mx-6 -mt-8">
-        <div className="mx-auto flex w-full max-w-6xl justify-end px-6">
-          {isAuthenticated ? (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={
-                saveStatus === "saving" ||
-                (hotelLabel ?? "").trim().length === 0
-              }
-              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:hover:border-slate-200 disabled:hover:bg-slate-100 disabled:hover:text-slate-400"
-            >
-              {saveStatus === "saving"
-                ? "Saving…"
-                : saveStatus === "saved"
-                  ? "Saved ✓"
-                  : savedHotelId
-                    ? "Update"
-                    : "Save"}
-            </button>
-          ) : (
-            <a
-              href="/auth/login?returnTo=/sandbox"
-              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white"
-              title="Log in to save this hotel to your profile"
-            >
-              Log in to save
-            </a>
-          )}
         </div>
       </div>
     </main>
