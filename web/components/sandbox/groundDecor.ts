@@ -33,15 +33,13 @@ interface ZoneExtents {
   carGap: number;
   maxCarLength: number;
   carFarX: number;
-  parkCarLength: number;
-  parkStallPitch: number;
-  parkLotHalfDepthZ: number;
-  parkLaneGap: number;
-  parkPatchDepthX: number;
+  parkCount: number;
+  stallWidth: number;
+  stallDepth: number;
+  parkSpanZ: number;
+  parkGap: number;
   parkNearX: number;
   parkFarX: number;
-  parkingLotFarX: number;
-  parkZExtent: number;
   edgeMargin: number;
 }
 
@@ -58,15 +56,14 @@ function computeZoneExtents(halfWidth: number, halfDepth: number): ZoneExtents {
   const maxCarLength = halfWidth * 0.85; // limo is the largest shuttle vehicle
   const carFarX = halfWidth + carGap + maxCarLength;
 
-  const parkCarLength = halfWidth * 0.5;
-  const parkStallPitch = parkCarLength * 1.3;
-  const parkLotHalfDepthZ = (PARK_STALL_COUNT * parkStallPitch) / 2;
-  const parkLaneGap = halfWidth * 0.3;
-  const parkPatchDepthX = parkCarLength * 0.9;
-  const parkNearX = -(halfWidth + parkLaneGap);
-  const parkFarX = parkNearX - parkPatchDepthX;
-  const parkingLotFarX = -parkFarX; // distance from center to the lane's outer edge
-  const parkZExtent = parkLotHalfDepthZ + parkStallPitch * 0.5; // + EV buffer past the last stall
+  const vehicleRef = Math.max(halfWidth, halfDepth);
+  const parkCount = PARK_STALL_COUNT;
+  const parkGap = halfWidth * 0.35;
+  const stallDepth = vehicleRef * 0.9;
+  const stallWidth = vehicleRef * 0.5;
+  const parkSpanZ = stallWidth * parkCount;
+  const parkNearX = -(halfWidth + parkGap);
+  const parkFarX = parkNearX - stallDepth;
 
   const edgeMargin = Math.max(halfWidth, halfDepth) * 0.35;
 
@@ -77,15 +74,13 @@ function computeZoneExtents(halfWidth: number, halfDepth: number): ZoneExtents {
     carGap,
     maxCarLength,
     carFarX,
-    parkCarLength,
-    parkStallPitch,
-    parkLotHalfDepthZ,
-    parkLaneGap,
-    parkPatchDepthX,
+    parkCount,
+    stallWidth,
+    stallDepth,
+    parkSpanZ,
+    parkGap,
     parkNearX,
     parkFarX,
-    parkingLotFarX,
-    parkZExtent,
     edgeMargin,
   };
 }
@@ -411,81 +406,53 @@ function buildSpaPod(
 interface ParkingLotLayout {
   nearX: number;
   farX: number;
-  halfDepthZ: number;
-  carLength: number;
+  stallWidth: number;
+  stallDepth: number;
+  parkCount: number;
+  parkSpanZ: number;
   groundLift: number;
 }
 
-/** Asphalt patch + painted stall lines + 2 parked cars, in the left (−X) lane. */
+/** Reserved parking stalls + wheel-stop curbs in the left (−X) lane. */
 function buildParkingLot(footprint: Footprint, layout: ParkingLotLayout): THREE.Group {
   const group = new THREE.Group();
-  const { baseY } = footprint;
-  const { nearX, farX, halfDepthZ, carLength, groundLift } = layout;
-  const centerX = (nearX + farX) / 2;
-  const patchWidthX = Math.abs(farX - nearX);
+  const { halfWidth, halfDepth, baseY } = footprint;
+  const { nearX, farX, stallWidth, stallDepth, parkCount, parkSpanZ, groundLift } = layout;
+  const vehicleRef = Math.max(halfWidth, halfDepth);
 
-  // Concrete pad — no colour, same grey as the building
-  const concreteMaterial = new THREE.MeshStandardMaterial({
-    color: MODEL_GREY,
-    roughness: 0.92,
-    side: THREE.DoubleSide,
-  });
-
-  const patch = new THREE.Mesh(
-    new THREE.PlaneGeometry(patchWidthX, halfDepthZ * 2),
-    concreteMaterial,
-  );
-  patch.rotation.x = Math.PI / 2;
-  patch.position.set(centerX, baseY + groundLift, 0);
-  group.add(patch);
-
-  // Stall dividing lines (white)
-  const stallCount = 3;
-  const stallPitch = (halfDepthZ * 2) / stallCount;
+  // Painted lines sit a hair above the floor to avoid z-fighting.
+  const lineLift = Math.max(vehicleRef * 0.004, groundLift * 4);
+  const lineThickness = stallWidth * 0.06;
+  const stallCenterX = nearX - stallDepth / 2;
   const lineMaterial = new THREE.MeshStandardMaterial({
     color: STALL_LINE_COLOR,
-    roughness: 0.6,
-    side: THREE.DoubleSide,
+    roughness: 0.8,
   });
-  for (let i = 0; i <= stallCount; i++) {
-    const z = -halfDepthZ + i * stallPitch;
+  for (let i = 0; i <= parkCount; i++) {
+    const z = -parkSpanZ / 2 + i * stallWidth;
     const line = new THREE.Mesh(
-      new THREE.PlaneGeometry(patchWidthX * 0.85, patchWidthX * 0.03),
+      new THREE.BoxGeometry(stallDepth, lineLift, lineThickness),
       lineMaterial,
     );
-    line.rotation.x = Math.PI / 2;
-    line.position.set(centerX, baseY + groundLift * 2, z);
+    line.position.set(stallCenterX, baseY + lineLift / 2, z);
     group.add(line);
   }
 
-  // Curbs along the long edges of the lot
+  // Concrete wheel-stop curb at the head (far −X end) of each stall.
   const curbMaterial = new THREE.MeshStandardMaterial({
     color: POOL_WALL_COLOR,
     roughness: 0.85,
   });
-  const curbHeight = patchWidthX * 0.06;
-  const curbDepth = patchWidthX * 0.06;
-  for (const sign of [-1, 1]) {
+  const curbHeight = vehicleRef * 0.06;
+  const curbDepthX = stallDepth * 0.08;
+  for (let s = 0; s < parkCount; s++) {
+    const zc = -parkSpanZ / 2 + (s + 0.5) * stallWidth;
     const curb = new THREE.Mesh(
-      new THREE.BoxGeometry(curbDepth, curbHeight, halfDepthZ * 2),
+      new THREE.BoxGeometry(curbDepthX, curbHeight, stallWidth * 0.6),
       curbMaterial,
     );
-    curb.position.set(
-      centerX + (patchWidthX / 2) * sign,
-      baseY + curbHeight / 2,
-      0,
-    );
+    curb.position.set(farX + curbDepthX / 2, baseY + curbHeight / 2, zc);
     group.add(curb);
-  }
-
-  // Two parked cars in stalls 0 and 2
-  const filledStalls = [0, 2];
-  for (const idx of filledStalls) {
-    const car = buildLowPolyCar("car", carLength);
-    car.rotation.y = Math.PI / 2;
-    const stallCenterZ = -halfDepthZ + stallPitch * (idx + 0.5);
-    car.position.set(centerX, baseY, stallCenterZ);
-    group.add(car);
   }
 
   return group;
@@ -501,27 +468,28 @@ interface EvChargerLayout {
 function buildEvCharger(footprint: Footprint, layout: EvChargerLayout): THREE.Group {
   const group = new THREE.Group();
   const { halfWidth, halfDepth, baseY } = footprint;
-  const unit = Math.max(halfWidth, halfDepth) * 0.16;
+  const vehicleRef = Math.max(halfWidth, halfDepth);
+  const evFootprint = vehicleRef * 0.1;
+  const evHeight = vehicleRef * 0.42;
   const postMaterial = new THREE.MeshStandardMaterial({
     color: MODEL_GREY,
     roughness: 0.5,
     flatShading: true,
   });
 
-  const centerX = (layout.nearX + layout.farX) / 2;
-  const postH = unit * 1.1;
+  const postH = evHeight;
   const post = new THREE.Mesh(
-    new THREE.BoxGeometry(unit * 0.22, postH, unit * 0.22),
+    new THREE.BoxGeometry(evFootprint, postH, evFootprint),
     postMaterial,
   );
-  post.position.set(centerX, baseY + postH / 2, layout.z);
+  post.position.set(layout.farX + evFootprint / 2, baseY + postH / 2, layout.z);
   group.add(post);
 
   const head = new THREE.Mesh(
-    new THREE.BoxGeometry(unit * 0.4, unit * 0.5, unit * 0.18),
+    new THREE.BoxGeometry(evFootprint * 1.2, evFootprint * 0.5, evFootprint * 0.18),
     postMaterial,
   );
-  head.position.set(centerX, baseY + postH * 0.85, layout.z);
+  head.position.set(layout.farX + evFootprint * 0.6, baseY + postH * 0.85, layout.z);
   group.add(head);
 
   return group;
@@ -567,19 +535,19 @@ export function buildGroundDecor(
     poolCenterZ,
     carGap,
     carFarX,
-    parkCarLength,
-    parkStallPitch,
-    parkLotHalfDepthZ,
+    parkCount,
+    stallWidth,
+    stallDepth,
+    parkSpanZ,
+    parkGap,
     parkNearX,
     parkFarX,
-    parkingLotFarX,
-    parkZExtent,
     edgeMargin,
   } = computeZoneExtents(halfWidth, halfDepth);
 
-  const floorHalfWidth = edgeMargin + Math.max(carFarX, parkingLotFarX);
-  const floorFrontZ = Math.max(halfDepth, parkZExtent) + edgeMargin; // doorway side
-  const floorBackZ = Math.min(poolCenterZ - poolHalfDepth, -parkZExtent) - edgeMargin;
+  const floorHalfWidth = Math.max(carFarX, halfWidth + parkGap + stallDepth) + edgeMargin;
+  const floorFrontZ = Math.max(halfDepth + edgeMargin, parkSpanZ / 2 + edgeMargin); // doorway side
+  const floorBackZ = poolCenterZ - poolHalfDepth - edgeMargin; // pool side, always reserved
 
   const shape = new THREE.Shape();
   shape.moveTo(-floorHalfWidth, floorBackZ);
@@ -706,15 +674,17 @@ export function buildGroundDecor(
       buildParkingLot(footprint, {
         nearX: parkNearX,
         farX: parkFarX,
-        halfDepthZ: parkLotHalfDepthZ,
-        carLength: parkCarLength,
+        stallWidth,
+        stallDepth,
+        parkCount,
+        parkSpanZ,
         groundLift,
       }),
     );
   }
 
   if (opts.hasEvCharging) {
-    const evZ = opts.hasParking ? parkLotHalfDepthZ + parkStallPitch * 0.4 : 0;
+    const evZ = opts.hasParking ? -parkSpanZ / 2 + stallWidth : 0;
     group.add(buildEvCharger(footprint, { nearX: parkNearX, farX: parkFarX, z: evZ }));
   }
 
