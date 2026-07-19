@@ -1,8 +1,6 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
 import { AIConsultantProvider } from "../contexts/AIConsultantContext";
 import { SessionProvider } from "../contexts/SessionContext";
 import { AuthNav, SiteNav } from "../components/shared/AuthNav";
@@ -14,7 +12,7 @@ export const metadata: Metadata = {
   description:
     "AI-powered hospitality digital twin and hotel investment simulator. All metrics are simulation estimates.",
   icons: {
-    icon: "/favicon-innsight.png",
+    icon: "/logo-innsight.png",
   },
 };
 
