@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CityScene } from "../components/landing/CityScene";
 
 export default function LandingPage() {
@@ -8,6 +9,9 @@ export default function LandingPage() {
 
       <section className="landing-hero">
         <h1>Innsight.<br /><em>Hotel market<br />opportunities.</em></h1>
+        <Link href="/discover" className="landing-get-started">
+          Get Started
+        </Link>
       </section>
     </main>
   );

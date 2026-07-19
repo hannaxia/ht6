@@ -30,7 +30,10 @@
 .fallback-tower-leg-right { margin-left: 1.45rem; transform: translateX(-50%) rotate(-13deg) !important; }
 .landing-atmosphere { position: absolute; inset: 0; z-index: -2; pointer-events: none; background: linear-gradient(90deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.82) 34%, rgba(249,250,248,0) 56%), linear-gradient(0deg, rgba(231,234,233,.3), transparent 45%); }
 .landing-hero { width: min(690px, calc(100% - 3rem)); padding: clamp(4.5rem, 10vh, 8rem) 0 4rem clamp(1.5rem, 7vw, 7.5rem); }
-.landing-hero h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(3.7rem, 7.2vw, 7.4rem); font-weight: 400; line-height: .88; letter-spacing: -.055em; }
+.landing-hero h1 { margin: 0; font-family: "Roboto", Arial, sans-serif; font-size: clamp(3.7rem, 7.2vw, 7.4rem); font-weight: 400; line-height: .88; letter-spacing: -.055em; }
 .landing-hero h1 em { display: inline-block; margin-top: .24em; color: #7a9182; font-size: .68em; font-weight: 400; line-height: .94; }
+.landing-get-started { display: inline-flex; align-items: center; justify-content: center; margin-top: 2.25rem; border: 1px solid #718779; background: #7a9182; color: #fff; padding: .85rem 1.65rem; font-family: "Roboto", Arial, sans-serif; font-size: .9rem; font-weight: 500; letter-spacing: .015em; transition: background-color .2s ease, color .2s ease, transform .2s ease; }
+.landing-get-started:hover { background: transparent; color: #52685a; transform: translateY(-2px); }
+.landing-get-started:focus-visible { outline: 2px solid #52685a; outline-offset: 4px; }
 @media (max-width: 700px) { .landing-hero { display: flex; min-height: 100%; flex-direction: column; justify-content: flex-end; padding: 6rem 1.5rem 4rem; } .landing-hero h1 { font-size: clamp(3.4rem,17vw,5.5rem); } .landing-atmosphere { background: linear-gradient(0deg, rgba(249,250,248,.98) 0%, rgba(249,250,248,.68) 70%, transparent 100%); } .fallback-cn-tower { right: 10%; height: 76%; } .fallback-buildings { width: 100%; height: 35%; } }
 @media (prefers-reduced-motion: reduce) { .landing-skyline-fallback { transition: none; } }
