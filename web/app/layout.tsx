@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description:
     "AI-powered hospitality digital twin and hotel investment simulator. All metrics are simulation estimates.",
   icons: {
-    icon: "/logo-innsight.png",
+    icon: "/favicon-innsight-transparent.png",
   },
 };
 

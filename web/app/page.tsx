@@ -18,7 +18,10 @@ export default function LandingPage() {
       <div className="landing-atmosphere" aria-hidden="true" />
 
       <section className="landing-hero">
-        <h1>Inns<span className="landing-i">i</span>ght<br /><em>Hotel market opportunities</em></h1>
+        <h1>
+          Inns<span className="landing-i">i</span>ght
+        </h1>
+        <p className="landing-tagline">Hotel market opportunities</p>
         <Link href="/discover" className="landing-cta">
           Get started
           <span className="landing-cta-arrow" aria-hidden="true">&rarr;</span>
