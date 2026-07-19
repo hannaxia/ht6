@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Lexend_Deca } from "next/font/google";
 import { CityScene } from "../components/landing/CityScene";
 
@@ -17,7 +18,10 @@ export default function LandingPage() {
       <div className="landing-atmosphere" aria-hidden="true" />
 
       <section className="landing-hero">
-        <h1>Inns<span className="landing-i">i</span>ght<br /><em>Hotel market opportunities</em></h1>
+        <h1>Innsight.<br /><em>Hotel market<br />opportunities.</em></h1>
+        <Link href="/discover" className="landing-get-started">
+          Get Started
+        </Link>
       </section>
     </main>
   );
