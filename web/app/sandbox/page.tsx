@@ -2,12 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConsultantPanel } from "../../components/consultant/ConsultantPanel";
-import { ChangeSummary } from "../../components/sandbox/ChangeSummary";
 import { MetricsPanel } from "../../components/sandbox/MetricsPanel";
 import { SandboxForm } from "../../components/sandbox/SandboxForm";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
-import { useAIConsultant } from "../../contexts/AIConsultantContext";
 import { useSession } from "../../contexts/SessionContext";
 import { ApiError } from "../../lib/api/client";
 import type {
@@ -34,7 +31,6 @@ const SandboxModel = dynamic(
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function SandboxPage() {
-  const { open, lastDeltas } = useAIConsultant();
   const { sessionId, isAuthenticated } = useSession();
   const [config, setConfig] = useState<HotelConfigPayload>(DEFAULT_CONFIG);
   const [hotelLabel, setHotelLabel] = useState<string | null>(null);
@@ -251,13 +247,6 @@ export default function SandboxPage() {
             values are simulation estimates.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={open}
-          className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
-        >
-          AI Consultant
-        </button>
       </div>
 
       {saveStatus === "error" ? (
@@ -307,11 +296,6 @@ export default function SandboxPage() {
                 — see README → Setup checklist)
               </p>
             )}
-            {lastDeltas?.simulation && metrics ? (
-              <div className="mt-4">
-                <ChangeSummary before={metrics} after={lastDeltas.simulation} />
-              </div>
-            ) : null}
           </section>
         </div>
 
@@ -326,37 +310,38 @@ export default function SandboxPage() {
           />
         </div>
       </div>
-      <ConsultantPanel
-        context={{ view: "sandbox", hotelConfig: config, metrics }}
-      />
-
-      <div className="fixed bottom-6 right-6 z-30">
-        {isAuthenticated ? (
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={
-              saveStatus === "saving" || (hotelLabel ?? "").trim().length === 0
-            }
-            className="rounded-full bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-lg hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {saveStatus === "saving"
-              ? "Saving…"
-              : saveStatus === "saved"
-                ? "Saved ✓"
-                : savedHotelId
-                  ? "Update"
-                  : "Save"}
-          </button>
-        ) : (
-          <a
-            href="/auth/login?returnTo=/sandbox"
-            className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-medium shadow-lg transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
-            title="Log in to save this hotel to your profile"
-          >
-            Log in to save
-          </a>
-        )}
+      {/* Break out of the max-w-7xl main and re-align to the header's
+          max-w-6xl container so the button's right edge matches Log out. */}
+      <div className="-mx-6">
+        <div className="mx-auto flex w-full max-w-6xl justify-end px-6">
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={
+                saveStatus === "saving" ||
+                (hotelLabel ?? "").trim().length === 0
+              }
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:hover:border-slate-200 disabled:hover:bg-slate-100 disabled:hover:text-slate-400"
+            >
+              {saveStatus === "saving"
+                ? "Saving…"
+                : saveStatus === "saved"
+                  ? "Saved ✓"
+                  : savedHotelId
+                    ? "Update"
+                    : "Save"}
+            </button>
+          ) : (
+            <a
+              href="/auth/login?returnTo=/sandbox"
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white"
+              title="Log in to save this hotel to your profile"
+            >
+              Log in to save
+            </a>
+          )}
+        </div>
       </div>
     </main>
   );
