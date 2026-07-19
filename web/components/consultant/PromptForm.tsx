@@ -25,7 +25,7 @@ export function PromptForm({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         rows={3}
-        placeholder='e.g. "Should I add coworking space?"'
+        placeholder='e.g. "Should I add a conference room?"'
         className="w-full resize-none rounded border border-slate-300 p-2 text-sm focus:border-slate-500 focus:outline-none"
       />
       <button

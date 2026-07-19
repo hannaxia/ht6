@@ -20,12 +20,9 @@ export const costTable = {
     wifi: 15_000,
     parking: 200_000,
     breakfast: 40_000,
-    coworking: 120_000,
     ev_charging: 80_000,
     conference_rooms: 250_000,
-    rooftop_bar: 350_000,
     airport_shuttle: 90_000,
-    smart_rooms: 150_000,
     pet_friendly: 20_000,
   } as Record<string, number>,
   /** USD per room for a full (renovationDelta = 1) renovation. */

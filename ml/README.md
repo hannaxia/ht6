@@ -128,22 +128,26 @@ post-fix.
 
 ## Amenity vocabulary
 
-Trained on the product's actual 15-amenity list (`packages/config/src/
+Trained on the product's actual 12-amenity list (`packages/config/src/
 amenityImpact.ts`, `web/components/sandbox/SandboxForm.tsx`), not the ML
 spec's own example list, so a Sandbox toggle maps directly onto a model
-feature.
+feature. (Originally 15 — `coworking`, `rooftop_bar`, and `smart_rooms`
+were removed product-wide as too rare a real-world amenity to bother
+modeling; see the removal note in `ml/training/feature_engineering.py` for
+the retrain requirement that came with cutting `coworking`, which had real
+Airbnb signal.)
 
-**Verified against the real data: 7 of these 15 never occur in Airbnb's
+**Verified against the real data: 5 of these 12 never occur in Airbnb's
 amenity taxonomy at all** — `spa`, `restaurant`, `bar`, `conference_rooms`,
-`rooftop_bar`, `airport_shuttle`, `smart_rooms`. These are hotel-specific
-concepts; Airbnb tags homes/apartments, not full-service hotels. Those
-columns are constant zero — harmless to XGBoost (never split on), but
-**toggling them in the Sandbox will not move an ML-predicted ADR or
-occupancy.** The deterministic config engine still has hand-tuned values
-for all 15 and should keep handling those seven specifically, unless/until
-a hotel-specific dataset is added. The 8 with real signal: `pool` (38% of
-listings), `parking` (94%), `wifi` (98%), `coworking`≈workspace (53%),
-`pet_friendly` (29%), `gym` (16%), `breakfast` (3.6%), `ev_charging` (3.7%).
+`airport_shuttle`. These are hotel-specific concepts; Airbnb tags
+homes/apartments, not full-service hotels. Those columns are constant zero
+— harmless to XGBoost (never split on), but **toggling them in the Sandbox
+will not move an ML-predicted ADR or occupancy.** The deterministic config
+engine still has hand-tuned values for all 12 and should keep handling
+those five specifically, unless/until a hotel-specific dataset is added.
+The 7 with real signal: `pool` (38% of listings), `parking` (94%), `wifi`
+(98%), `pet_friendly` (29%), `gym` (16%), `breakfast` (3.6%), `ev_charging`
+(3.7%).
 
 Matching itself uses word-boundary regex, not plain substring — plain
 substring matching let `"spa"` false-positive-match inside `"workspace"`

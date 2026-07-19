@@ -140,7 +140,6 @@ AMENITY_TO_ASPECT: dict[str, str] = {
     "restaurant": "restaurant",
     "parking": "parking",
     "wifi": "wifi",
-    "coworking": "business_facilities",
     "conference_rooms": "business_facilities",
 }
 ASSUMED_AMENITY_SENTIMENT = 0.6  # flat assumed-positive; see simplification #5

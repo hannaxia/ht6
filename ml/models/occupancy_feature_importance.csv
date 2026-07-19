@@ -1,79 +1,76 @@
 feature,importance
-rating_overall,0.06006361
-room_type_entire_home,0.05032694
-pool,0.043421417
-wifi,0.038679693
-room_type_private_room,0.027247911
-rating_location,0.025504583
-listing_type_Entire serviced apartment,0.025394462
-pet_friendly,0.024118166
-longitude,0.02267503
-guests,0.019893048
-latitude,0.01889897
-listing_type_Entire guesthouse,0.018581113
-listing_type_infrequent_sklearn,0.018286118
-listing_type_Entire cabin,0.018105978
-ttm_avg_rate,0.017517796
-baths,0.016677303
-coworking,0.015742287
-listing_type_Private room in cabin,0.015193073
-listing_type_Private room in hostel,0.015021161
-listing_type_Entire home,0.014902617
-parking,0.0148069225
-gym,0.014440307
-breakfast,0.014099573
-listing_type_Entire guest suite,0.013621646
-listing_type_Private room in bed and breakfast,0.01311737
-listing_type_Room in boutique hotel,0.012750641
-listing_type_Entire condo,0.012608975
-listing_type_Entire rental unit,0.012274562
-room_type_hotel_room,0.012193699
-listing_type_Entire townhouse,0.01215676
-listing_type_Entire bungalow,0.01211778
-listing_type_Hut,0.0117741
-listing_type_Room in aparthotel,0.0116160875
-listing_type_Private room in resort,0.011564062
-listing_type_Private room in rental unit,0.011532825
-listing_type_Camper/RV,0.011474113
-listing_type_Entire place,0.011446893
-listing_type_Entire villa,0.011388638
-ev_charging,0.011283682
-room_type_shared_room,0.0111707635
-listing_type_Private room in home,0.010879879
-listing_type_Entire loft,0.010764123
-listing_type_Private room,0.010523028
-listing_type_Private room in guest suite,0.010469029
-listing_type_Private room in villa,0.010438755
-listing_type_Private room in condo,0.010344271
-listing_type_Farm stay,0.010022516
-listing_type_Private room in bungalow,0.009788345
-bedrooms,0.009776033
-listing_type_Entire cottage,0.009566967
-listing_type_Room in hotel,0.009495715
-beds,0.009084185
-listing_type_Entire house,0.009071711
-listing_type_Private room in townhouse,0.009027755
-listing_type_Entire apartment,0.008859348
-listing_type_Private room in loft,0.008686021
-listing_type_Tiny home,0.008677546
-listing_type_Private room in guesthouse,0.008204819
-listing_type_Entire vacation home,0.008130213
-listing_type_Entire bed and breakfast,0.007944007
-listing_type_Private room in house,0.007192187
-listing_type_Private room in serviced apartment,0.0069604926
-listing_type_Entire chalet,0.0067552505
-listing_type_Treehouse,0.0062529985
-listing_type_Private room in nature lodge,0.006251234
-listing_type_Private room in tiny home,0.0059342925
-listing_type_Shared room in hostel,0.005784339
-listing_type_Shared room in home,0.005165447
-listing_type_Room in bed and breakfast,0.0037854188
-listing_type_Room in serviced apartment,0.002473424
-bar,0.0
-restaurant,0.0
-spa,0.0
-smart_rooms,0.0
-airport_shuttle,0.0
-rooftop_bar,0.0
+rating_overall,0.06406301
+room_type_entire_home,0.054447293
+pool,0.04104204
+wifi,0.033524543
+room_type_private_room,0.03198389
+listing_type_Entire serviced apartment,0.024605444
+rating_location,0.023278765
+longitude,0.022621479
+pet_friendly,0.022564884
+listing_type_Entire cabin,0.021026887
+guests,0.019498454
+listing_type_Entire guesthouse,0.019290352
+latitude,0.01856276
+listing_type_Private room in cabin,0.018415662
+ttm_avg_rate,0.017512314
+baths,0.015819445
+listing_type_infrequent_sklearn,0.015343447
+listing_type_Private room in resort,0.015289147
+gym,0.015157272
+parking,0.0148401195
+room_type_hotel_room,0.014572785
+breakfast,0.0139180515
+listing_type_Room in boutique hotel,0.013910389
+listing_type_Entire rental unit,0.013561125
+listing_type_Private room in condo,0.013540071
+listing_type_Private room in hostel,0.013405523
+listing_type_Entire guest suite,0.013309174
+listing_type_Private room in villa,0.012927448
+listing_type_Entire bungalow,0.012922819
+listing_type_Entire villa,0.012841023
+listing_type_Entire home,0.012689058
+listing_type_Private room in home,0.012249816
+listing_type_Entire condo,0.011868869
+listing_type_Private room in townhouse,0.011780139
+ev_charging,0.01175269
+listing_type_Private room in bed and breakfast,0.01168712
+listing_type_Private room in rental unit,0.011171873
+listing_type_Entire loft,0.01100448
+listing_type_Room in aparthotel,0.010999933
+listing_type_Entire place,0.010898178
+listing_type_Camper/RV,0.010522802
+room_type_shared_room,0.01045418
+listing_type_Hut,0.0104057295
+listing_type_Private room,0.010318951
+bedrooms,0.010034079
+listing_type_Farm stay,0.010009766
+beds,0.009985555
+listing_type_Entire cottage,0.009874545
+listing_type_Private room in guest suite,0.009765795
+listing_type_Entire townhouse,0.00944402
+listing_type_Entire house,0.009006894
+listing_type_Tiny home,0.00884432
+listing_type_Private room in bungalow,0.008798845
+listing_type_Private room in loft,0.008536179
+listing_type_Room in hotel,0.008510156
+listing_type_Private room in serviced apartment,0.008098815
+listing_type_Private room in house,0.007973294
+listing_type_Private room in guesthouse,0.007768036
+listing_type_Entire bed and breakfast,0.0077123917
+listing_type_Entire vacation home,0.007474614
+listing_type_Treehouse,0.0074306913
+listing_type_Room in serviced apartment,0.007420384
+listing_type_Private room in nature lodge,0.00714904
+listing_type_Entire apartment,0.0071347575
+listing_type_Entire chalet,0.006967065
+listing_type_Shared room in hostel,0.006366762
+listing_type_Shared room in home,0.0052363635
+listing_type_Private room in tiny home,0.0051348084
+listing_type_Room in bed and breakfast,0.003723413
 conference_rooms,0.0
+bar,0.0
+airport_shuttle,0.0
+spa,0.0
+restaurant,0.0
 listing_type_Private room in cottage,0.0

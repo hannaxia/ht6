@@ -318,7 +318,12 @@ export default function SandboxPage() {
         {/* Right column: seamless 3D building (transparent, no panel). Wider
             than the text column and auto-fit so the model is never clipped. */}
         <div className="min-h-[420px] lg:min-h-[560px]">
-          <SandboxModel hotelType={config.hotelType} />
+          <SandboxModel
+            hotelType={config.hotelType}
+            hasPool={config.amenities.includes("pool")}
+            petFriendly={config.amenities.includes("pet_friendly")}
+            airportShuttle={config.amenities.includes("airport_shuttle")}
+          />
         </div>
       </div>
       <ConsultantPanel

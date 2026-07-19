@@ -8,11 +8,8 @@ export const AMENITIES = [
   "breakfast",
   "wifi",
   "parking",
-  "coworking",
   "ev_charging",
   "conference_rooms",
-  "rooftop_bar",
   "airport_shuttle",
-  "smart_rooms",
   "pet_friendly",
 ] as const;

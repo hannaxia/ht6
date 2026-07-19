@@ -80,12 +80,9 @@ const AMENITY_PATTERNS: Record<string, string[]> = {
   bar: ["bar"],
   breakfast: ["breakfast"],
   parking: ["parking"],
-  coworking: ["coworking", "workspace"],
   ev_charging: ["ev charging", "electric vehicle", "car charging", "ev charger"],
   conference_rooms: ["conference", "meeting room", "business cent", "banquet"],
-  rooftop_bar: ["rooftop"],
   airport_shuttle: ["airport shuttle", "shuttle"],
-  smart_rooms: ["smart tv", "smart room"],
   pet_friendly: ["pet-friendly", "pets allowed", "pet friendly", "pets welcome"],
 };
 

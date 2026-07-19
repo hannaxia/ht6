@@ -34,16 +34,25 @@ MODELS_DIR = ML_DIR / "models"
 # ML spec's own example list, so a trained model's features line up with
 # what the Hotel Sandbox lets a user toggle.
 #
-# VERIFIED against this dataset (see ml/README.md): 7 of these 15 never
+# VERIFIED against this dataset (see ml/README.md): 5 of these 12 never
 # occur in real Airbnb amenity text at all — spa, restaurant, bar,
-# conference_rooms, rooftop_bar, airport_shuttle, smart_rooms are all
-# hotel-specific concepts; Airbnb's taxonomy tags homes/apartments, not
-# full-service hotels. Those columns will be constant zero — harmless to
-# XGBoost (it just never splits on them), but toggling them in the Sandbox
-# will NOT move an ML-predicted ADR/occupancy. The deterministic config
-# engine (packages/config/src/amenityImpact.ts) still has hand-tuned values
-# for all 15 and should keep handling those specific amenities unless/until
-# a hotel-specific dataset is added.
+# conference_rooms, airport_shuttle are all hotel-specific concepts;
+# Airbnb's taxonomy tags homes/apartments, not full-service hotels. Those
+# columns will be constant zero — harmless to XGBoost (it just never
+# splits on them), but toggling them in the Sandbox will NOT move an
+# ML-predicted ADR/occupancy. The deterministic config engine
+# (packages/config/src/amenityImpact.ts) still has hand-tuned values for
+# all 12 and should keep handling those specific amenities unless/until a
+# hotel-specific dataset is added.
+#
+# coworking/rooftop_bar/smart_rooms were removed from the product's amenity
+# vocabulary (too rare to bother with) — dropped here too so this stays in
+# sync. Removing them changes NUMERIC_FEATURES in train_adr.py/
+# train_occupancy.py (which splat CANONICAL_AMENITIES), so the currently
+# saved adr/occupancy_preprocessing.pkl + _model.pkl (fit on the old
+# 15-amenity schema) will now mismatch — retrain both before relying on ML
+# predictions for ADR/occupancy again; until then mlClient's fallback
+# design means the app just silently uses the deterministic formula.
 #
 # Word-boundary regex, not plain substring — plain substring matching let
 # "spa" false-positive-match inside "workspace" (...work-SPA-ce...).
@@ -56,12 +65,9 @@ AMENITY_PATTERNS: dict[str, list[str]] = {
     "breakfast": [r"\bbreakfast\b"],
     "wifi": [r"\bwifi\b"],
     "parking": [r"\bparking\b"],
-    "coworking": [r"\bworkspace\b", r"\bcoworking\b", r"\boffice\b"],
     "ev_charging": [r"\bev charger\b", r"electric vehicle", r"\bev charging\b"],
     "conference_rooms": [r"\bconference\b", r"meeting room"],  # 0%
-    "rooftop_bar": [r"\brooftop\b"],  # 0%
     "airport_shuttle": [r"airport shuttle", r"\bshuttle\b"],  # 0%
-    "smart_rooms": [r"smart tv", r"smart lock", r"smart home"],  # 0%
     "pet_friendly": [r"pets allowed", r"pet friendly"],
 }
 CANONICAL_AMENITIES = list(AMENITY_PATTERNS.keys())
