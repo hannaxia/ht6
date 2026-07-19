@@ -10,7 +10,8 @@
     "start": "tsx src/index.ts",
     "smoke": "tsx src/scripts/engineSmoke.ts",
     "seed:locations": "tsx src/scripts/seedLocations.ts",
-    "scrape:hotels": "tsx src/scripts/scrapeCanadianHotels.ts"
+    "scrape:hotels": "tsx src/scripts/scrapeCanadianHotels.ts",
+    "scrape:amenities": "tsx src/scripts/scrapeHotelAmenities.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

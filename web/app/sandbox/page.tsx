@@ -1,16 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConsultantPanel } from "../../components/consultant/ConsultantPanel";
-import { ChangeSummary } from "../../components/sandbox/ChangeSummary";
 import { MetricsPanel } from "../../components/sandbox/MetricsPanel";
 import { SandboxForm } from "../../components/sandbox/SandboxForm";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
-import { useAIConsultant } from "../../contexts/AIConsultantContext";
 import { useSession } from "../../contexts/SessionContext";
 import { ApiError } from "../../lib/api/client";
 import type {
   HotelConfigPayload,
+  InvestmentMode,
   SimulateHotelOutput,
 } from "../../lib/api/schemas";
 import { savedHotelsApi } from "../../lib/api/savedHotels";
@@ -22,10 +21,16 @@ import {
 import { createInFlightDebouncer } from "../../lib/debounce";
 import { log } from "../../lib/log";
 
+// WebGL only runs in the browser — load the model client-side only.
+const SandboxModel = dynamic(
+  () =>
+    import("../../components/sandbox/SandboxModel").then((m) => m.SandboxModel),
+  { ssr: false },
+);
+
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export default function SandboxPage() {
-  const { open, lastDeltas } = useAIConsultant();
   const { sessionId, isAuthenticated } = useSession();
   const [config, setConfig] = useState<HotelConfigPayload>(DEFAULT_CONFIG);
   const [hotelLabel, setHotelLabel] = useState<string | null>(null);
@@ -36,6 +41,13 @@ export default function SandboxPage() {
   const [nameDraft, setNameDraft] = useState("");
   // Save-to-profile state.
   const [savedHotelId, setSavedHotelId] = useState<string | null>(null);
+  const [investmentMode, setInvestmentMode] =
+    useState<InvestmentMode>("new_build");
+  const [startingConfig, setStartingConfig] =
+    useState<HotelConfigPayload>(DEFAULT_CONFIG);
+  const [baselineAnnualProfit, setBaselineAnnualProfit] = useState<number | null>(
+    null,
+  );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveErrorCode, setSaveErrorCode] = useState<string | null>(null);
   // Gates the first simulation until we've checked for a Market Discovery
@@ -61,8 +73,23 @@ export default function SandboxPage() {
           const response = await simulationsApi.create(
             latest,
             sessionId,
-            metricsRef.current,
+            {
+              beforeMetrics: metricsRef.current,
+              investmentMode,
+              startingConfig,
+              baselineAnnualOperatingProfit:
+                investmentMode === "upgrade"
+                  ? (baselineAnnualProfit ?? undefined)
+                  : undefined,
+            },
           );
+          if (
+            investmentMode === "upgrade" &&
+            baselineAnnualProfit === null &&
+            Number.isFinite(response.result.annualOperatingProfit)
+          ) {
+            setBaselineAnnualProfit(response.result.annualOperatingProfit);
+          }
           setErrorCode(null);
           return response.result;
         } catch (err) {
@@ -75,7 +102,7 @@ export default function SandboxPage() {
       });
       if (result) setMetrics(result);
     },
-    [sessionId],
+    [sessionId, investmentMode, startingConfig, baselineAnnualProfit],
   );
 
   // On mount, pick up a config handed off from Market Discovery (selecting an
@@ -87,12 +114,23 @@ export default function SandboxPage() {
       setConfig(handoff.config);
       setHotelLabel(handoff.label);
       setIsCustom(handoff.isCustom);
+      setStartingConfig(handoff.config);
+      const mode: InvestmentMode =
+        handoff.origin === "existing" ||
+        (handoff.origin === "saved" && !handoff.isCustom)
+          ? "upgrade"
+          : "new_build";
+      setInvestmentMode(mode);
+      setBaselineAnnualProfit(null);
       if (handoff.savedHotelId) setSavedHotelId(handoff.savedHotelId);
       log.info("sandbox config from discovery handoff", handoff.origin);
     } else {
       // Direct visit to /sandbox with no handoff — DEFAULT_CONFIG stands in
       // for a from-scratch hotel, so it's nameable like a placed pin.
       setHotelLabel("New hotel");
+      setStartingConfig(DEFAULT_CONFIG);
+      setInvestmentMode("new_build");
+      setBaselineAnnualProfit(null);
     }
     setHandoffResolved(true);
   }, []);
@@ -158,7 +196,7 @@ export default function SandboxPage() {
   }
 
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-6 py-8">
+    <main className="relative mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-6 py-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold">
@@ -209,13 +247,6 @@ export default function SandboxPage() {
             values are simulation estimates.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={open}
-          className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
-        >
-          AI Consultant
-        </button>
       </div>
 
       {saveStatus === "error" ? (
@@ -244,63 +275,73 @@ export default function SandboxPage() {
         />
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">
-            Configuration
-          </h2>
-          <SandboxForm config={config} onChange={handleChange} />
-        </section>
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">
-            Estimated metrics
-          </h2>
-          {metrics ? (
-            <MetricsPanel metrics={metrics} />
-          ) : (
-            <p className="text-sm text-slate-500">
-              Waiting for the first simulation… (requires the API and MongoDB —
-              see README → Setup checklist)
-            </p>
-          )}
-          {lastDeltas?.simulation && metrics ? (
-            <div className="mt-4">
-              <ChangeSummary before={metrics} after={lastDeltas.simulation} />
-            </div>
-          ) : null}
-        </section>
-      </div>
-      <ConsultantPanel
-        context={{ view: "sandbox", hotelConfig: config, metrics }}
-      />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_1fr]">
+        {/* Left column: all the text — configuration, then metrics. */}
+        <div className="flex flex-col gap-6">
+          <section className="rounded border border-slate-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">
+              Configuration
+            </h2>
+            <SandboxForm config={config} onChange={handleChange} />
+          </section>
+          <section>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">
+              Estimated metrics
+            </h2>
+            {metrics ? (
+              <MetricsPanel metrics={metrics} />
+            ) : (
+              <p className="text-sm text-slate-500">
+                Waiting for the first simulation… (requires the API and MongoDB
+                — see README → Setup checklist)
+              </p>
+            )}
+          </section>
+        </div>
 
-      <div className="fixed bottom-6 right-6 z-30">
-        {isAuthenticated ? (
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={
-              saveStatus === "saving" || (hotelLabel ?? "").trim().length === 0
-            }
-            className="rounded-full bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-lg hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {saveStatus === "saving"
-              ? "Saving…"
-              : saveStatus === "saved"
-                ? "Saved ✓"
-                : savedHotelId
-                  ? "Update"
-                  : "Save"}
-          </button>
-        ) : (
-          <a
-            href="/auth/login?returnTo=/sandbox"
-            className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-medium shadow-lg transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
-            title="Log in to save this hotel to your profile"
-          >
-            Log in to save
-          </a>
-        )}
+        {/* Right column: seamless 3D building (transparent, no panel). Wider
+            than the text column and auto-fit so the model is never clipped. */}
+        <div className="min-h-[420px] lg:min-h-[560px]">
+          <SandboxModel
+            hotelType={config.hotelType}
+            hasPool={config.amenities.includes("pool")}
+            petFriendly={config.amenities.includes("pet_friendly")}
+            airportShuttle={config.amenities.includes("airport_shuttle")}
+          />
+        </div>
+      </div>
+      {/* Break out of the max-w-7xl main and re-align to the header's
+          max-w-6xl container so the button's right edge matches Log out. */}
+      <div className="-mx-6">
+        <div className="mx-auto flex w-full max-w-6xl justify-end px-6">
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={
+                saveStatus === "saving" ||
+                (hotelLabel ?? "").trim().length === 0
+              }
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:hover:border-slate-200 disabled:hover:bg-slate-100 disabled:hover:text-slate-400"
+            >
+              {saveStatus === "saving"
+                ? "Saving…"
+                : saveStatus === "saved"
+                  ? "Saved ✓"
+                  : savedHotelId
+                    ? "Update"
+                    : "Save"}
+            </button>
+          ) : (
+            <a
+              href="/auth/login?returnTo=/sandbox"
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium transition-colors hover:border-accent hover:bg-accent hover:text-white"
+              title="Log in to save this hotel to your profile"
+            >
+              Log in to save
+            </a>
+          )}
+        </div>
       </div>
     </main>
   );

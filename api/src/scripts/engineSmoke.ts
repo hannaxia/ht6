@@ -64,14 +64,14 @@ check(
   simulateHotelOutputSchema.safeParse(out).success,
 );
 
-const withCoworking = await engine.simulateHotel({
+const withConferenceRooms = await engine.simulateHotel({
   ...base,
-  amenities: [...base.amenities, "coworking"],
+  amenities: [...base.amenities, "conference_rooms"],
 });
 check(
-  "coworking in downtown raises ADR",
-  withCoworking.adr > out.adr,
-  `$${out.adr.toFixed(2)} → $${withCoworking.adr.toFixed(2)}`,
+  "conference rooms in downtown raises ADR",
+  withConferenceRooms.adr > out.adr,
+  `$${out.adr.toFixed(2)} → $${withConferenceRooms.adr.toFixed(2)}`,
 );
 
 check(

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { SavedHotelPreview } from "../../components/sandbox/SavedHotelPreview";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
 import { useSession } from "../../contexts/SessionContext";
 import { ApiError } from "../../lib/api/client";
@@ -122,63 +123,67 @@ export default function ProfilePage() {
           {savedHotels.map((hotel) => (
             <li
               key={hotel.id}
-              className="flex flex-col gap-3 rounded border border-slate-200 bg-white p-4"
+              className="flex gap-3 rounded border border-slate-200 bg-white p-4"
             >
-              <div>
-                <p className="font-semibold text-slate-900">{hotel.name}</p>
-                <p className="text-xs text-slate-500">
-                  {hotel.config.rooms}-room {hotel.config.stars}★{" "}
-                  {hotel.config.hotelType.replace(/_/g, " ")} ·{" "}
-                  {hotel.coordinates.lat.toFixed(3)},{" "}
-                  {hotel.coordinates.lng.toFixed(3)}
-                </p>
+              <div className="flex flex-1 flex-col gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">{hotel.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {hotel.config.rooms}-room {hotel.config.stars}★{" "}
+                    {hotel.config.hotelType.replace(/_/g, " ")}
+                  </p>
+                </div>
+
+                {hotel.metrics ? (
+                  <dl className="grid grid-cols-3 gap-2 text-xs">
+                    {hotel.metrics.adr !== undefined ? (
+                      <Metric
+                        label="ADR"
+                        value={`$${Math.round(hotel.metrics.adr)}`}
+                      />
+                    ) : null}
+                    {hotel.metrics.occupancy !== undefined ? (
+                      <Metric
+                        label="Occupancy"
+                        value={`${Math.round(hotel.metrics.occupancy)}%`}
+                      />
+                    ) : null}
+                    {hotel.metrics.rating !== undefined ? (
+                      <Metric
+                        label="Rating"
+                        value={`${hotel.metrics.rating.toFixed(1)}/5`}
+                      />
+                    ) : null}
+                  </dl>
+                ) : null}
+
+                <div className="mt-auto grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openInSandbox(hotel)}
+                    className="rounded bg-slate-900 px-3 py-1.5 text-center text-xs font-medium text-white hover:bg-slate-700"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => viewOnMap(hotel)}
+                    className="rounded border border-slate-300 bg-white px-3 py-1.5 text-center text-xs font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(hotel)}
+                    className="rounded border border-slate-300 bg-white px-3 py-1.5 text-center text-xs font-medium text-red-700 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
 
-              {hotel.metrics ? (
-                <dl className="grid grid-cols-3 gap-2 text-xs">
-                  {hotel.metrics.adr !== undefined ? (
-                    <Metric
-                      label="ADR"
-                      value={`$${Math.round(hotel.metrics.adr)}`}
-                    />
-                  ) : null}
-                  {hotel.metrics.occupancy !== undefined ? (
-                    <Metric
-                      label="Occupancy"
-                      value={`${Math.round(hotel.metrics.occupancy)}%`}
-                    />
-                  ) : null}
-                  {hotel.metrics.rating !== undefined ? (
-                    <Metric
-                      label="Rating"
-                      value={`${hotel.metrics.rating.toFixed(1)}/5`}
-                    />
-                  ) : null}
-                </dl>
-              ) : null}
-
-              <div className="mt-auto flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => openInSandbox(hotel)}
-                  className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
-                >
-                  Open in sandbox
-                </button>
-                <button
-                  type="button"
-                  onClick={() => viewOnMap(hotel)}
-                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
-                >
-                  View on map
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(hotel)}
-                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
-                >
-                  Delete
-                </button>
+              <div className="w-28 shrink-0 self-stretch">
+                <SavedHotelPreview config={hotel.config} />
               </div>
             </li>
           ))}

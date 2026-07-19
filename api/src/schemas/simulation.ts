@@ -70,6 +70,13 @@ export const simulationRequestSchema = z.object({
   sessionId: z.string().min(1),
   startingHotelId: z.string().nullable().optional(),
   config: hotelConfigSchema,
+  investmentMode: z.enum(["new_build", "upgrade"]).default("new_build"),
+  // Starting config for upgrade scenarios (existing hotel) so CapEx reflects
+  // only incremental changes instead of full rebuild cost.
+  startingConfig: hotelConfigSchema.optional(),
+  // Baseline annual operating profit of the starting config; when present in
+  // upgrade mode, ROI/payback are based on uplift profit.
+  baselineAnnualOperatingProfit: z.number().nonnegative().optional(),
   /** The sandbox's previous metrics, persisted as beforeMetrics when present. */
   beforeMetrics: z.record(z.unknown()).nullable().optional(),
   changes: z.record(z.unknown()).optional(),

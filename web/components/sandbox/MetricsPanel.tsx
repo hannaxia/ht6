@@ -20,7 +20,7 @@ export function MetricsPanel({ metrics }: { metrics: SimulateHotelOutput }) {
       : `${metrics.paybackYears.toFixed(1)} yrs`;
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <MetricCard label="ADR / night" value={cad(metrics.adr)} />
         <MetricCard
           label="Occupancy"

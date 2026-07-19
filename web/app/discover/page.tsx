@@ -2,11 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ConsultantPanel } from "../../components/consultant/ConsultantPanel";
 import { DiscoverMap, type PlacedPin } from "../../components/discover/DiscoverMap";
 import { DiscoverSidebar } from "../../components/discover/DiscoverSidebar";
 import { ErrorBanner } from "../../components/shared/ErrorBanner";
-import { useAIConsultant } from "../../contexts/AIConsultantContext";
 import { useSession } from "../../contexts/SessionContext";
 import { ApiError } from "../../lib/api/client";
 import { hotelsApi } from "../../lib/api/hotels";
@@ -44,7 +42,6 @@ const CANADA_BBOX = "-141.0,41.6,-52.6,83.1";
 
 export default function DiscoverPage() {
   const router = useRouter();
-  const { open } = useAIConsultant();
   const { sessionId, isAuthenticated } = useSession();
   const [hotels, setHotels] = useState<Stay22Hotel[]>([]);
   const [cells, setCells] = useState<OpportunityCell[]>([]);
@@ -59,6 +56,8 @@ export default function DiscoverPage() {
   const [newHotelName, setNewHotelName] = useState("");
   // True while fetching location context before navigating to the sandbox.
   const [configuring, setConfiguring] = useState(false);
+  // The intro card is dismissible via its X button.
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     // Guards against React 18 Strict Mode's dev-mode double effect
@@ -251,51 +250,77 @@ export default function DiscoverPage() {
 
       {/* Floating header / hints over the map. */}
       <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-md">
-        <div className="pointer-events-auto rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-sm font-bold text-slate-900">
-                Market Discovery — Canada
-              </h1>
-              <p className="mt-0.5 text-xs text-slate-600">
-                Click a hotel marker to inspect it, or click anywhere to drop a
-                new hotel. Opportunity scores are simulation estimates.
-              </p>
+        {showIntro ? (
+          <div className="pointer-events-auto rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-sm font-bold text-slate-900">
+                  Market Discovery
+                </h1>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  Each dot represents a hotel. Click a hotel to inspect it, or
+                  click anywhere to drop a new hotel. The heatmap shows areas
+                  with higher and lower opportunity for a new hotel, based on
+                  factors like competition.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIntro(false)}
+                aria-label="Dismiss"
+                title="Dismiss"
+                className="-mr-1 -mt-1 shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={open}
-              className="shrink-0 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium transition-colors hover:border-slate-900 hover:bg-slate-900 hover:text-white"
-            >
-              AI Consultant
-            </button>
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowIntro(true)}
+            aria-label="About Market Discovery"
+            title="About Market Discovery"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-sm font-bold text-slate-600 shadow-sm backdrop-blur hover:bg-slate-100 hover:text-slate-900"
+          >
+            i
+          </button>
+        )}
 
-          {hotelError ? (
-            <div className="mt-2">
-              <ErrorBanner
-                errorCode={hotelError}
-                message={
-                  hotelError === "network_error"
-                    ? "Could not reach the Innsight API — is it running on port 4000?"
-                    : "Hotels could not be loaded. If Stay22 is not configured, the map shows no hotels."
-                }
-              />
-            </div>
-          ) : null}
-          {gridError ? (
-            <div className="mt-2">
-              <ErrorBanner
-                errorCode={gridError}
-                message={
-                  gridError === "database_unavailable"
-                    ? "MongoDB is not configured — the opportunity heatmap needs it (README → Setup checklist → MongoDB Atlas)."
-                    : "Opportunity grid could not be loaded."
-                }
-              />
-            </div>
-          ) : null}
-        </div>
+        {hotelError ? (
+          <div className="pointer-events-auto mt-2 rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+            <ErrorBanner
+              errorCode={hotelError}
+              message={
+                hotelError === "network_error"
+                  ? "Could not reach the Innsight API — is it running on port 4000?"
+                  : "Hotels could not be loaded. If Stay22 is not configured, the map shows no hotels."
+              }
+            />
+          </div>
+        ) : null}
+        {gridError ? (
+          <div className="pointer-events-auto mt-2 rounded-lg border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+            <ErrorBanner
+              errorCode={gridError}
+              message={
+                gridError === "database_unavailable"
+                  ? "MongoDB is not configured — the opportunity heatmap needs it (README → Setup checklist → MongoDB Atlas)."
+                  : "Opportunity grid could not be loaded."
+              }
+            />
+          </div>
+        ) : null}
       </div>
 
       <DiscoverSidebar
@@ -310,8 +335,6 @@ export default function DiscoverPage() {
         onConfigurePlaced={configurePlacedHotel}
         onClose={closeSidebar}
       />
-
-      <ConsultantPanel context={{ view: "discover", city: "toronto" }} />
     </div>
   );
 }

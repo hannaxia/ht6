@@ -1,7 +1,6 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { AIConsultantProvider } from "../contexts/AIConsultantContext";
 import { SessionProvider } from "../contexts/SessionContext";
 import { AuthNav, SiteNav } from "../components/shared/AuthNav";
 import { auth0 } from "../lib/auth0";
@@ -12,7 +11,7 @@ export const metadata: Metadata = {
   description:
     "AI-powered hospitality digital twin and hotel investment simulator. All metrics are simulation estimates.",
   icons: {
-    icon: "/logo-innsight.png",
+    icon: "/favicon-innsight-transparent.png",
   },
 };
 
@@ -24,7 +23,15 @@ export default async function RootLayout({
   const session = await auth0?.getSession();
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className="flex h-screen flex-col bg-slate-50 text-slate-900 antialiased">
         <header className="shrink-0 border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
@@ -46,9 +53,7 @@ export default async function RootLayout({
           </div>
         </header>
         <SessionProvider initialSessionId={session?.user.sub}>
-          <AIConsultantProvider>
-            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-          </AIConsultantProvider>
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </SessionProvider>
       </body>
     </html>

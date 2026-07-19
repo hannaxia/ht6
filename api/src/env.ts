@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 
 const envSchema = z.object({
   STAY22_API_KEY: z.string().min(1).optional(),
+  SERPAPI_API_KEY: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
   MONGODB_URI: z.string().min(1).optional(),

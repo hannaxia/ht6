@@ -1,0 +1,127 @@
+feature,importance
+room_type_private_room,0.08117087
+baths,0.07866985
+state_New York,0.06968591
+state_Hawaii,0.066427805
+bedrooms,0.04233073
+state_Baja California Sur,0.040157206
+listing_type_Entire villa,0.03387573
+guests,0.02524608
+state_California,0.024626885
+state_Colorado,0.01940351
+longitude,0.017192524
+room_type_entire_home,0.016542267
+state_Florida,0.015700106
+state_Baja California,0.01524296
+pool,0.014468896
+state_Kentucky,0.013979072
+rating_overall,0.01366388
+rating_location,0.01352747
+listing_type_Entire serviced apartment,0.013484747
+listing_type_infrequent_sklearn,0.0128331445
+state_infrequent_sklearn,0.011692519
+latitude,0.011108782
+state_Sinaloa,0.011082291
+state_Georgia,0.010647374
+state_Nevada,0.010374068
+state_Missouri,0.009956868
+state_Ontario,0.009952858
+gym,0.009596495
+rating_cleanliness,0.009386918
+parking,0.00872742
+state_Utah,0.008490774
+state_Sonora,0.008038242
+state_Tennessee,0.007845247
+breakfast,0.0076059597
+state_Provincia de Guanacaste,0.007542985
+listing_type_Entire bungalow,0.0073994226
+listing_type_Entire home,0.007267885
+ev_charging,0.007179441
+state_Puntarenas Province,0.0070366156
+listing_type_Private room in home,0.006840612
+state_Texas,0.006837032
+state_Alberta,0.006495525
+state_Quintana Roo,0.006021514
+superhost,0.006015697
+state_Guerrero,0.0057118614
+listing_type_Entire place,0.0056406925
+state_Alaska,0.00552773
+beds,0.005526968
+state_Oregon,0.0054347245
+listing_type_Private room in bed and breakfast,0.0052154753
+listing_type_Room in boutique hotel,0.0051681045
+state_Puerto Rico,0.004695938
+listing_type_Entire loft,0.0045931516
+state_Nuevo León,0.004561844
+state_Arizona,0.004523606
+listing_type_Entire rental unit,0.0044385716
+listing_type_Entire condo,0.004346068
+listing_type_Entire townhouse,0.0043234867
+state_Oaxaca,0.004089019
+state_Massachusetts,0.0040591992
+state_South Carolina,0.004002105
+pet_friendly,0.0038455597
+listing_type_Private room in resort,0.003843849
+listing_type_Entire cabin,0.0037413805
+state_Virginia,0.0037250326
+state_Illinois,0.003652418
+room_type_shared_room,0.003625177
+state_Jalisco,0.003472617
+state_North Carolina,0.0033938747
+state_New Mexico,0.0033258297
+listing_type_Entire guest suite,0.0033018305
+state_British Columbia,0.0031900993
+state_Oklahoma,0.0031888867
+listing_type_Private room in cabin,0.0029726562
+state_Quebec,0.0023459375
+listing_type_Hut,0.0022998052
+state_Limón Province,0.0022185147
+listing_type_Entire guesthouse,0.0019788286
+state_Nayarit,0.0019018039
+state_Guanajuato,0.0018672212
+listing_type_Room in hotel,0.0018262173
+listing_type_Treehouse,0.0018153684
+state_New Jersey,0.0016611634
+listing_type_Entire cottage,0.0016054439
+state_Alabama,0.0016031964
+state_Pennsylvania,0.001551557
+listing_type_Room in aparthotel,0.0013634277
+listing_type_Entire chalet,0.0013076789
+state_Querétaro,0.0012859809
+listing_type_Entire house,0.0011936498
+listing_type_Entire bed and breakfast,0.0011742036
+state_Maryland,0.0011599247
+room_type_hotel_room,0.0010101553
+listing_type_Private room in townhouse,0.0010078889
+listing_type_Camper/RV,0.0009784774
+wifi,0.0009384858
+listing_type_Room in bed and breakfast,0.0009327954
+listing_type_Entire vacation home,0.0008069001
+listing_type_Private room in condo,0.0007795532
+state_Puebla,0.0007748845
+listing_type_Private room in villa,0.00073031604
+state_Ohio,0.0007008431
+listing_type_Private room in rental unit,0.0006601518
+listing_type_Private room in guesthouse,0.0004812786
+listing_type_Private room,0.00039049838
+listing_type_Private room in serviced apartment,0.0003609722
+listing_type_Private room in guest suite,0.0003036397
+listing_type_Private room in cottage,0.00028217523
+state_Ciudad de México,0.00012367625
+listing_type_Private room in loft,4.435582e-05
+listing_type_Shared room in hostel,2.3199711e-05
+restaurant,0.0
+bar,0.0
+spa,0.0
+conference_rooms,0.0
+airport_shuttle,0.0
+listing_type_Entire apartment,0.0
+listing_type_Farm stay,0.0
+listing_type_Private room in nature lodge,0.0
+listing_type_Private room in house,0.0
+listing_type_Private room in hostel,0.0
+listing_type_Private room in bungalow,0.0
+listing_type_Private room in tiny home,0.0
+listing_type_Room in serviced apartment,0.0
+listing_type_Shared room in home,0.0
+listing_type_Tiny home,0.0

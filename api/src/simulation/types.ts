@@ -69,6 +69,8 @@ export interface SimulateHotelOutput {
   disclaimer: string;
 }
 
+export type InvestmentMode = "new_build" | "upgrade";
+
 export interface OpportunityCellContext {
   basePrice: number;
   segmentAdrNorm: number;

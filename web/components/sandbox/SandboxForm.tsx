@@ -13,8 +13,6 @@ const HOTEL_TYPES = [
   "extended_stay",
 ] as const;
 
-const SEGMENTS = ["leisure", "business", "mixed"] as const;
-
 export { AMENITIES };
 
 export function SandboxForm({
@@ -62,24 +60,6 @@ export function SandboxForm({
             ))}
           </select>
         </FormField>
-        <FormField label="Target audience">
-          <select
-            className={inputClass}
-            value={config.targetSegment}
-            onChange={(e) =>
-              set(
-                "targetSegment",
-                e.target.value as HotelConfigPayload["targetSegment"],
-              )
-            }
-          >
-            {SEGMENTS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </FormField>
         <FormField label={`Rooms: ${config.rooms}`}>
           <input
             type="range"
@@ -88,7 +68,7 @@ export function SandboxForm({
             step={10}
             value={config.rooms}
             onChange={(e) => set("rooms", Number(e.target.value))}
-            className="w-full"
+            className="w-full accent-accent"
           />
         </FormField>
         <FormField label={`Stars: ${config.stars}`}>
@@ -101,7 +81,7 @@ export function SandboxForm({
             onChange={(e) =>
               set("stars", Number(e.target.value) as HotelConfigPayload["stars"])
             }
-            className="w-full"
+            className="w-full accent-accent"
           />
         </FormField>
         <FormField
@@ -114,7 +94,7 @@ export function SandboxForm({
             step={0.05}
             value={config.modernity}
             onChange={(e) => set("modernity", Number(e.target.value))}
-            className="w-full"
+            className="w-full accent-accent"
           />
         </FormField>
       </div>
@@ -131,6 +111,7 @@ export function SandboxForm({
                 type="checkbox"
                 checked={config.amenities.includes(amenity)}
                 onChange={() => toggleAmenity(amenity)}
+                className="accent-accent"
               />
               {amenity.replace(/_/g, " ")}
             </label>

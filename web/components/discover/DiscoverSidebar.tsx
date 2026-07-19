@@ -2,7 +2,7 @@
 
 import type { SavedHotel, Stay22Hotel } from "../../lib/api/schemas";
 import type { PlacedPin } from "./DiscoverMap";
-import { Stay22Attribution } from "../shared/Stay22Attribution";
+import { priceCad, titleCase } from "../../lib/format";
 
 /**
  * Right-hand panel over the fullscreen map. Shows details for a selected
@@ -101,15 +101,6 @@ export function DiscoverSidebar({
               ? "Open in sandbox →"
               : "Configure →"}
         </button>
-        <p className="mt-2 text-[11px] text-slate-500">
-          Opens the Hotel Sandbox
-          {selectedHotel
-            ? " prefilled from this hotel and its surrounding market."
-            : selectedSaved
-              ? " with your saved configuration."
-              : " seeded from this location's nearby market."}{" "}
-          All resulting metrics are simulation estimates.
-        </p>
       </div>
     </aside>
   );
@@ -190,7 +181,7 @@ function HotelDetails({ hotel }: { hotel: Stay22Hotel }) {
         <p className="font-semibold text-slate-900">{hotel.name}</p>
         {hotel.city ? (
           <p className="text-xs text-slate-500">
-            {capitalize(hotel.city)}
+            {titleCase(hotel.city)}
             {hotel.country ? `, ${hotel.country}` : ""}
           </p>
         ) : null}
@@ -204,10 +195,7 @@ function HotelDetails({ hotel }: { hotel: Stay22Hotel }) {
           <Stat label="Guest rating" value={`${hotel.rating.toFixed(1)}/5.0`} />
         ) : null}
         {hotel.price ? (
-          <Stat
-            label="Price"
-            value={`$${hotel.price.amount} ${hotel.price.currency}/${hotel.price.per}`}
-          />
+          <Stat label="Price" value={priceCad(hotel.price)} />
         ) : null}
       </dl>
 
@@ -239,8 +227,6 @@ function HotelDetails({ hotel }: { hotel: Stay22Hotel }) {
           View on Stay22 →
         </a>
       ) : null}
-
-      <Stay22Attribution />
     </div>
   );
 }
@@ -280,13 +266,7 @@ function PlacedForm({
   );
 }
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
 
-function titleCase(s: string) {
-  return s.split(" ").map(capitalize).join(" ");
-}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
